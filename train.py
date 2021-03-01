@@ -73,6 +73,6 @@ def eval(model, dataloader, args):
     labels = np.concatenate(labels, axis=0)
     
     preds = np.argmax(outputs, axis=-1)
-    score = accuracy_score(labels, outputs)
+    score = accuracy_score(labels, preds)
  
     return score
