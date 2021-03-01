@@ -1,0 +1,6 @@
+numpy
+scipy
+torch
+torch_scatter
+torch_geometric
+deepsnap
