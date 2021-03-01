@@ -136,3 +136,28 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         x = self.graph_layer(x, u, edge_index)
         y = self.prediction_head(x)
         return x, y
+    
+class DeepSnapWrapper(torch.nn.Module):
+    """
+    Wrap a model to accept DeepSnap batches instead of raw tensors. 
+    """
+    def __init__(self, model): 
+        """
+        @param model:
+            torch.nn.Module
+            expected signature: model(x, u, edge_index)
+        """
+        self.model = model 
+        
+    def reset_parameters(self):
+        self.model.reset_parameters()
+    
+    def forward(self, batch):
+        """        
+        @param batch:
+            A DeepSnap.Batch object
+        """
+        x = batch.node_embedding
+        u = batch.node_feature
+        edge_index = batch.edge_index
+        return self.model(x, u, edge_index)
