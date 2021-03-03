@@ -4,3 +4,5 @@ torch
 torch_scatter
 torch_geometric
 deepsnap
+ogb
+tensorboard
