@@ -5,7 +5,6 @@ Command-line arguments for train.py, test.py.
 
 import argparse
 
-
 def get_train_args():
     """
     Get arguments needed in train.py.
@@ -84,7 +83,14 @@ def get_train_args():
                         default='NLL',
                         choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL'),
                         help='Name of dev metric to determine best checkpoint.')
-
+    
+    parser.add_argument('--hidden-dim',
+                        type=int,
+                        default=32,
+                        help="Number of hidden dimensions to use in IGNN")
+    parser.add_argument('--debug',
+                        action = 'store_true',
+                        help = "Turn on debugging for the RGNN")
 
     args = parser.parse_args()
 
@@ -112,7 +118,7 @@ def add_common_args(parser):
 
     parser.add_argument('--dataset',
                         type=str,
-                        choices=('ogbn-products', 'ogbn-arxiv'),
+                        choices=('ogbn-products', 'ogbn-arxiv', 'pyg-karate'),
                         default='ogbn-arxiv')
 
     parser.add_argument('--save_dir',

@@ -5,6 +5,7 @@ Created on Mon Mar  1 03:55:06 2021
 
 import numpy as np
 import scipy.sparse.linalg as linalg
+import networkx as nx
 
 import logging
 import os
@@ -330,8 +331,9 @@ def build_dataloaders(args, dataset, split_idx):
 
     # DeepSNAP does not provide an API to use already existing splitting indices. 
     # Will submit a request at the end of the class
-    # In the menantime, long live debugging! Having our index based split for node prediction! 
-    graph = dataset.graphs[0]
+    # In the meantime, long live debugging! Having our index based split for node prediction! 
+    graph = dataset.graphs[0]   
+    graph.node_index = graph.node_label_index.clone().view(-1,1)
     split_datasets = {}
 
     for split in ["train", "valid", "test"]:
@@ -364,9 +366,23 @@ def build_dataloaders(args, dataset, split_idx):
 
 def build_model(args, dataset):
     """
-    
     Note: Hardcoded to use node features for now
     """
+    # RGNN requires special handling
+    if args.name == "RecurrentGraphNeuralNet":
+        # Assume we are training on a dataset of 1 graph
+        assert len(dataset) == 1, "Recurrent GNN assumes we are training on a dataset of size 1"
+        num_nodes = dataset[0].node_label_index.shape[0]
+        from models import RecurrentGraphNeuralNet, DeepSnapWrapper
+        model = RecurrentGraphNeuralNet(
+            node_channels=dataset.num_node_features, 
+            hidden_channels=args.hidden_dim, 
+            prediction_channels=dataset.num_node_labels, 
+            num_nodes=num_nodes,
+            debug=args.debug)
+        model = DeepSnapWrapper(model)
+        return model 
+
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
     model = model_class(dataset.num_node_features, dataset.num_node_labels, args)

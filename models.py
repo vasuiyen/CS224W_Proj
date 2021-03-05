@@ -116,23 +116,41 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
              node_channels: int,
              hidden_channels: int,
              prediction_channels: int,
+             num_nodes: int,
+             debug: bool = False,
              **kwargs):
+        """        
+        @param node_channels: 
+            Node feature dimension
+        @param hidden_channels: 
+            Model hidden dimension
+        @param prediction_channels: 
+            Dimension of prediction output
+        @param num_nodes:
+            Number of nodes in the graph
+        """       
         super(RecurrentGraphNeuralNet, self).__init__()
         self.graph_layer = GeneralGraphLayer(
             in_channels = hidden_channels, 
             out_channels = hidden_channels, 
             node_channels = node_channels, **kwargs)
         self.prediction_head = nn.Linear(hidden_channels, prediction_channels)
+        self.node_embedding = nn.Embedding(num_nodes, hidden_channels, sparse=True)
+        # Manually turn off embedding training
+        # We update the embeddings manually
+        self.node_embedding.weight.requires_grad = False
+        self.debug = debug
         
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
+        self.node_embedding.reset_parameters()
     
-    def forward(self, x, u, edge_index):
+    def forward(self, node_index, node_feature, edge_index):
         """        
-        @param x: 
-            Hidden node representation at step T.
-            Shape: (batch_size, hidden_channels)
+        @param node_index: 
+            Indices of the nodes being passed in.
+            Shape: (batch_size, 1)
         @param u: 
             Base node features. 
             Shape: (batch_size, node_channels)
@@ -140,10 +158,21 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             A tensor containing (source, target) node indexes
             Shape: (2, num_edges)
             
-        @return x: Hidden node representation at step T+1. 
         @return y: Model outputs at step T+1. 
         """
-        x = self.graph_layer(x, u, edge_index)
+        # testing code
+        if self.debug:
+            x_orig = self.node_embedding(node_index)            
+            print(f"Inputs: node_index shape {node_index.shape}, node_feature shape {node_feature.shape}")
+        
+        x = self.node_embedding(node_index)
+        x = self.graph_layer(x, node_feature, edge_index)
+        
+        if self.debug:
+            assert (x_orig - x).abs().sum() > 0
+        
+        # Manually update the embedding
+        self.node_embedding.weight[node_index] = x
         y = self.prediction_head(x)
         return x, y
     
@@ -155,8 +184,9 @@ class DeepSnapWrapper(torch.nn.Module):
         """
         @param model:
             torch.nn.Module
-            expected signature: model(x, u, edge_index)
+            expected signature: model(node_index, node_feature, edge_index)
         """
+        super(DeepSnapWrapper, self).__init__()
         self.model = model 
         
     def reset_parameters(self):
@@ -167,7 +197,7 @@ class DeepSnapWrapper(torch.nn.Module):
         @param batch:
             A DeepSnap.Batch object
         """
-        x = batch.node_embedding
-        u = batch.node_feature
+        node_index = batch.node_index
+        node_feature = batch.node_feature
         edge_index = batch.edge_index
-        return self.model(x, u, edge_index)
+        return self.model(node_index, node_feature, edge_index)

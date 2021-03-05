@@ -69,7 +69,7 @@ class GeneralGraphLayer(MessagePassing):
         """
         x = self.W(x)
         x = self.propagate(edge_index, x=(x,x))
-        x = x + self.U(u)
+        x = x + self.phi(u)
         x = self.activation_fn(x)
         return x
     
