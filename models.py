@@ -219,5 +219,8 @@ class DataParallelWrapper(torch.nn.DataParallel):
     def reset_parameters(self):
         self.module.reset_parameters()
     def clamp(self, min, max):
-        self.module.clamp(min, max)
-    
+        try:
+            self.module.clamp(min, max)
+        except:
+            # GCNs don't need clamping
+            return
