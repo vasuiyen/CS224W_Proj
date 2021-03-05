@@ -56,7 +56,7 @@ def main(args):
     log.info('Building dataset...')
     
     # Refactored to allow KarateClub dataset
-    dataset, labels, split_idx, evaluator = load_pyg_dataset(args.dataset)
+    dataset, split_idx, evaluator = load_pyg_dataset(args.dataset)
 
     split_idx = dataset.get_idx_split() 
     data = dataset[0]
@@ -78,7 +78,7 @@ def main(args):
 
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(data.x.size(-1), dataset.num_classes, args)
+    model = model_class(data.num_node_features, dataset.num_classes, args, log, num_nodes=dataset[0].num_nodes)
     
     model = DataParallelWrapper(model)
     if args.load_path:
@@ -166,7 +166,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             optimizer.zero_grad()
 
             # Forward
-            out = model(batch)[batch.train_mask]
+            out = model(torch.squeeze(torch.nonzero(batch.train_mask == True, as_tuple=False), dim=-1), batch)[batch.train_mask]
             labels = batch.y.squeeze(1)[batch.train_mask]
 
             # Calculate the loss and do the average
@@ -180,7 +180,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             
             # Need to project recurrent weight into feasible set
             # This is not the feasible set but we haven't implemented it yet
-            projection_norm_inf(model.module.model.graph_layer.W.weight, 0.99 / 25)
+            model.project_recurrent_weight(0.99 / 25)
 
             # Add batch data to the evaluation data
             y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
@@ -215,7 +215,7 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
                 continue
 
             # Forward
-            out = model(batch)[batch.valid_mask]
+            out = model((batch.valid_mask == True).nonzero(), batch)[batch.valid_mask]
             labels = batch.y.squeeze(1)[batch.valid_mask]
 
             # Calculate the loss and do the average

@@ -328,8 +328,7 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
     assert source in ['ogbn', 'pyg']
     if source == 'ogbn':
         dataset = PygNodePropPredDataset(name = dataset_name, root = root)
-        labels = dataset[0].y
-        return dataset, labels, dataset.get_idx_split(), Evaluator(dataset_name)
+        return dataset, dataset.get_idx_split(), Evaluator(dataset_name)
     elif source == 'pyg':
         from torch_geometric.datasets import KarateClub, CoraFull
         if name == "karate":
@@ -350,8 +349,7 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
             'valid': perm[num_train : num_train + num_val], 
             'test': perm[num_train + num_val:]
         }
-        labels = dataset[0].y.view(-1,1)
-        return dataset, labels, split_idx, Evaluator('ogbn-arxiv')
+        return dataset, split_idx, Evaluator('ogbn-arxiv')
     else:
         raise Exception("Dataset not recognized")
 

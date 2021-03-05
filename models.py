@@ -1,15 +1,23 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
 
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import GCNConv
 
 from layers import *
+from utils import *
 
 class GCN(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, args):
+    def __init__(self, 
+                input_dim, 
+                output_dim, 
+                args, 
+                log, 
+                **kwargs):
+
         # TODO: Implement this function that initializes self.convs, 
         # self.bns, and self.softmax.
 
@@ -25,6 +33,8 @@ class GCN(torch.nn.Module):
         self.softmax = None
 
         self.loss = F.nll_loss
+
+        self.log = log
 
         ############# Your code here ############
         ## Note:
@@ -61,7 +71,10 @@ class GCN(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, data):
+    def project_recurrent_weight(self, kappa):
+        pass
+
+    def forward(self, node_index, data):
         # TODO: Implement this function that takes the feature tensor x,
         # edge_index tensor adj_t and returns the output tensor as
         # shown in the figure.
@@ -114,52 +127,57 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
     
     Implemented based on Gu (2017), equation 1 https://arxiv.org/abs/2009.06211
     """
-    def __init__(self, 
-             node_channels: int,
-             hidden_channels: int,
-             prediction_channels: int,
-             num_nodes: int,
-             return_embeds: bool = False,
-             debug: bool = False,
-             **kwargs):
+    def __init__(self,
+                input_dim, 
+                output_dim, 
+                args, 
+                log,
+                **kwargs):
         """        
-        @param node_channels: 
+        @param input_dim: 
             Node feature dimension
-        @param hidden_channels: 
-            Model hidden dimension
-        @param prediction_channels: 
+        @param output_dim: 
             Dimension of prediction output
         @param num_nodes:
             Number of nodes in the graph
             
-        return_embeds: if True, return a tuple of (hidden_state, output)
         debug: if True, do some debug logging
         """       
         super(RecurrentGraphNeuralNet, self).__init__()
+
+        num_nodes = kwargs.pop('num_nodes')
+
         self.graph_layer = GeneralGraphLayer(
-            in_channels = hidden_channels, 
-            out_channels = hidden_channels, 
-            node_channels = node_channels, **kwargs)
-        self.prediction_head = nn.Linear(hidden_channels, prediction_channels)
+            in_channels = args.hidden_dim, 
+            out_channels = args.hidden_dim, 
+            node_channels = input_dim, 
+            **kwargs
+        )
+
+        self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         self.softmax = torch.nn.LogSoftmax(dim=-1)
-        self.node_embedding = nn.Embedding(num_nodes, hidden_channels)
+        self.node_embedding = nn.Embedding(num_nodes, args.hidden_dim)
+
         # Manually turn off embedding training
         # We update the embeddings manually
         self.node_embedding.weight.requires_grad = False
-        self.debug = debug
+
+        self.log = log
         
-        if debug:
-            print(f"Initializing RGNN with node_channels={node_channels}, hidden_channels={hidden_channels}, prediction_channels={prediction_channels}")
+        self.log.debug(f"Initializing RGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
         
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
         self.node_embedding.reset_parameters()
+
+    def project_recurrent_weight(self, kappa):
+        projection_norm_inf(self.model.graph_layer.W.weight, 0.99 / 25)
         
     def clamp(self, min, max):
         self.graph_layer.clamp(min, max)
     
-    def forward(self, node_index, node_feature, edge_index):
+    def forward(self, node_index, data):
         """        
         @param node_index: 
             Indices of the nodes being passed in.
@@ -174,51 +192,29 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         @return y: Model outputs at step T+1. 
         """
         # testing code
-        if self.debug:
-            x_orig = self.node_embedding(node_index)            
-            print(f"Inputs: node_index shape {node_index.shape}, node_feature shape {node_feature.shape}")
+
+        node_feature, edge_index = data.x, data.edge_index
+        
         x = self.node_embedding(node_index)
         x = self.graph_layer(x, node_feature, edge_index)
-        if self.debug:
+
+        if self.log.level <= logging.DEBUG:
+            self.log.debug(f"Inputs: node_index shape {node_index.shape}, node_feature shape {node_feature.shape}")
+            x_orig = self.node_embedding(node_index)
             assert (x_orig - x).abs().sum() > 0
+
         self.node_embedding.weight[node_index] = x.detach()
         out = self.prediction_head(x)
         return self.softmax(out)
-    
-class DeepSnapWrapper(torch.nn.Module):
-    """
-    Wrap a model to accept DeepSnap batches instead of raw tensors. 
-    """
-    def __init__(self, model): 
-        """
-        @param model:
-            torch.nn.Module
-            expected signature: model(node_index, node_feature, edge_index)
-        """
-        super(DeepSnapWrapper, self).__init__()
-        self.model = model 
-        
-    def reset_parameters(self):
-        self.model.reset_parameters()
-        
-    def clamp(self, min, max):
-        self.model.clamp(min, max)
-    
-    def forward(self, batch):
-        """        
-        @param batch:
-            A DeepSnap.Batch object
-        """
-        node_index = batch.node_index
-        node_feature = batch.node_feature
-        edge_index = batch.edge_index
-        return self.model(node_index, node_feature, edge_index)
-    
-    
+
 class DataParallelWrapper(torch.nn.DataParallel):  
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
     def reset_parameters(self):
         self.module.reset_parameters()
+
+    def project_recurrent_weight(self, kappa):
+        self.module.project_recurrent_weight(kappa)
+
     def clamp(self, min, max):
         try:
             self.module.clamp(min, max)
