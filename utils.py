@@ -326,7 +326,7 @@ def build_deepsnap_dataset(pyg_dataset):
     dataset = deepsnap.dataset.GraphDataset(graphs, task='node')
     return dataset
 
-def build_dataloaders(args, dataset, split_idx):
+def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
 
     # DeepSNAP does not provide an API to use already existing splitting indices. 
     # Will submit a request at the end of the class
@@ -359,19 +359,8 @@ def build_dataloaders(args, dataset, split_idx):
                 shuffle=shuffle)
     
 
-    return dataloaders
+    return datasets, dataloaders
 
-
-def build_model(args, dataset):
-    """
-    
-    Note: Hardcoded to use node features for now
-    """
-    # Create the model, optimizer and checkpoint
-    model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(dataset.num_node_features, dataset.num_node_labels, args)
-
-    return model
 
 def str_to_attribute(obj, attr_name):
     try:

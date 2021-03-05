@@ -6,18 +6,14 @@ Training script
 """
 
 import sys
-import copy
-import os
 import random
 import numpy as np
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import torch.optim.lr_scheduler as sched
-import torch.utils.data as data
-from torch_geometric.data import DataLoader
+from torch_geometric.data import ClusterData, ClusterLoader
+
 
 from ogb.nodeproppred import PygNodePropPredDataset
 from ogb.nodeproppred import Evaluator
@@ -25,7 +21,6 @@ from ogb.nodeproppred import Evaluator
 
 import tqdm
 
-from collections import OrderedDict
 from sklearn.metrics import *
 
 from torch.utils.tensorboard import SummaryWriter
@@ -60,16 +55,29 @@ def main(args):
     log.info('Building dataset...')
     # Download and process data at './dataset/xxx'
     dataset = PygNodePropPredDataset(name = args.dataset, root = 'dataset/')
-    labels = dataset[0].y
-    split_idx = dataset.get_idx_split() 
     evaluator = Evaluator(name = args.dataset)
 
-    dataset = build_deepsnap_dataset(dataset)
-    dataloaders = build_dataloaders(args, dataset, split_idx) 
+    split_idx = dataset.get_idx_split() 
+    data = dataset[0]
+
+    # Convert split indices to boolean masks and add them to `data`.
+    for key, idx in split_idx.items():
+        mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+        mask[idx] = True
+        data[f'{key}_mask'] = mask
+
+    cluster_data = ClusterData(data, num_parts=args.num_partitions,
+                               recursive=False, save_dir=dataset.processed_dir)
+
+    dataset_loader = ClusterLoader(cluster_data, batch_size=args.batch_size,
+                           shuffle=args.data_shuffle, num_workers=args.num_workers)
 
     # Get model
     log.info('Building model...')
-    model = build_model(args, dataset)
+
+    # Create the model, optimizer and checkpoint
+    model_class = str_to_attribute(sys.modules['models'], args.name)
+    model = model_class(data.x.size(-1), dataset.num_classes, args)
     
     model = nn.DataParallel(model)
     if args.load_path:
@@ -107,7 +115,7 @@ def main(args):
         for epoch in range(args.num_epochs):
 
             # Train and display the stats
-            train_results = train(model, dataloaders['train'], labels, split_idx['train'], optimizer, device, evaluator, args.loss_type)
+            train_results = train(model, dataset_loader, optimizer, device, evaluator, args.loss_type)
             
             # Log the metrics
             train_log_message = ''.join('{} - {}; '.format(k, v) for k, v in train_results.items())
@@ -118,7 +126,7 @@ def main(args):
                 tboard.add_scalar('train/{k}', v, epoch)
 
             # Evaluate, display the stats and save the model
-            dev_results = evaluate(model, dataloaders['valid'], labels, split_idx['valid'], device, evaluator, args.loss_type)
+            dev_results = evaluate(model, dataset_loader, device, evaluator, args.loss_type)
 
             # Save the model
             saver.save(epoch, model, dev_results[args.metric_name], device)
@@ -136,58 +144,89 @@ def main(args):
             progress_bar.set_postfix(eval_loss=dev_results['loss'])
 
 
-def train(model, data_loader, labels, idx, optimizer, device, evaluator, loss_type):
+def train(model, data_loader, optimizer, device, evaluator, loss_type):
 
     model.train()
+
+    loss_meter = AverageMeter()
+    y_true = []
+    y_pred = []
 
     with torch.enable_grad():
         for batch in data_loader:
             
-            batch = batch.to(device)  
+            batch = batch.to(device)
+            batch_size = batch.train_mask.sum().item()
+
+            if batch_size == 0:
+                continue
+            
             optimizer.zero_grad()
 
-            labels = labels.to(device)
-
             # Forward
-            out = model(batch)
-            loss = isometricLoss(out[idx], torch.squeeze(labels[idx]), loss_type)
+            out = model(batch)[batch.train_mask]
+            labels = batch.y.squeeze(1)[batch.train_mask]
+
+            # Calculate the loss and do the average
+            loss = isometricLoss(out, labels, loss_type)
+            loss_meter.update(loss.item(), batch_size)
 
             # Backward
             loss.backward()
 
-        optimizer.step()
+            optimizer.step()
 
+            # Add batch data to the evaluation data
+            y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
+            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+
+    # Evaluate the training results
     results = evaluator.eval({
-        'y_true': labels[idx],
-        'y_pred': torch.argmax(out[idx], -1, keepdim=True)
+        'y_true': np.asarray(y_true),
+        'y_pred': np.asarray(y_pred)
     })
 
-    results['loss'] = loss.cpu().item()
+    results['loss'] = loss_meter.avg
 
     return results
 
 
-def evaluate(model, data_loader, labels, idx, device, evaluator, loss_type):
+def evaluate(model, data_loader, device, evaluator, loss_type):
 
     model.eval()
 
-    with torch.no_grad():
+    loss_meter = AverageMeter()
+    y_true = []
+    y_pred = []
+
+    with torch.enable_grad():
         for batch in data_loader:
             
-            batch = batch.to(device)  
+            batch = batch.to(device)
+            batch_size = batch.valid_mask.sum().item()
 
-            labels = labels.to(device)
+            if batch_size == 0:
+                continue
 
             # Forward
-            out = model(batch)
-            loss = isometricLoss(out[idx], torch.squeeze(labels[idx]), loss_type)
+            out = model(batch)[batch.valid_mask]
+            labels = batch.y.squeeze(1)[batch.valid_mask]
 
+            # Calculate the loss and do the average
+            loss = isometricLoss(out, labels, loss_type)
+            loss_meter.update(loss.item(), batch_size)
+
+            # Add batch data to the evaluation data
+            y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
+            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+
+    # Evaluate the training results
     results = evaluator.eval({
-        'y_true': labels[idx],
-        'y_pred': torch.argmax(out[idx], -1, keepdim=True)
+        'y_true': np.asarray(y_true),
+        'y_pred': np.asarray(y_pred)
     })
 
-    results['loss'] = loss.cpu().item()
+    results['loss'] = loss_meter.avg
 
     return results
 

@@ -84,7 +84,7 @@ def get_train_args():
                         default='NLL',
                         choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL'),
                         help='Name of dev metric to determine best checkpoint.')
-
+    
 
     args = parser.parse_args()
 
@@ -113,7 +113,7 @@ def add_common_args(parser):
     parser.add_argument('--dataset',
                         type=str,
                         choices=('ogbn-products', 'ogbn-arxiv'),
-                        default='ogbn-arxiv')
+                        default='ogbn-products')
 
     parser.add_argument('--save_dir',
                         type=str,
@@ -141,9 +141,14 @@ def add_train_test_args(parser):
                         default=224,
                         help='Random seed for reproducibility.')
 
+    parser.add_argument('--num_partitions',
+                        type=int,
+                        default=2**13,
+                        help='The number of partitions.')
+
     parser.add_argument('--batch_size',
                         type=int,
-                        default=512,
+                        default=2048,
                         help='Batch size per GPU. Scales automatically when \
                                   multiple GPUs are available.')
 
