@@ -48,10 +48,13 @@ class GeneralGraphLayer(MessagePassing):
         A recurrent neural net is infinitely deep. 
         Source: https://pouannes.github.io/blog/initialization/
         """
-        nn.init.kaiming_uniform_(self.phi.weights)
-        nn.init.kaiming_uniform_(self.W.weights)
+        nn.init.kaiming_uniform_(self.phi.weight)
+        nn.init.kaiming_uniform_(self.W.weight)
         if self.node_feature_bias: nn.init.uniform_(self.phi.bias)
         if self.node_embedding_bias: nn.init.uniform_(self.W.bias)
+        
+    def clamp(self, min, max):
+        torch.clamp(self.W.weight, min, max)
     
     def forward(self, x, u, edge_index):
         """
