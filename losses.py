@@ -10,6 +10,8 @@ def isometricLoss(output, target, type='L1'):
         loss = nn.BCEWithLogitsLoss()
     if type == 'BCE':
         loss = nn.BCELoss()
+    if type == 'CrossEntropy':
+        loss = nn.CrossEntropyLoss()
     if type == 'NLL':
         loss = nn.NLLLoss()
     return loss(output, target)

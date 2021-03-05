@@ -33,6 +33,7 @@ from utils import *
 from losses import *
 from args import get_train_args
 
+from models import DataParallelWrapper
 
 def main(args):
 
@@ -53,9 +54,9 @@ def main(args):
 
     # Get data loader
     log.info('Building dataset...')
-    # Download and process data at './dataset/xxx'
-    dataset = PygNodePropPredDataset(name = args.dataset, root = 'dataset/')
-    evaluator = Evaluator(name = args.dataset)
+    
+    # Refactored to allow KarateClub dataset
+    dataset, labels, split_idx, evaluator = load_pyg_dataset(args.dataset)
 
     split_idx = dataset.get_idx_split() 
     data = dataset[0]
@@ -79,7 +80,7 @@ def main(args):
     model_class = str_to_attribute(sys.modules['models'], args.name)
     model = model_class(data.x.size(-1), dataset.num_classes, args)
     
-    model = nn.DataParallel(model)
+    model = DataParallelWrapper(model)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model = load_model(model, args.load_path, args.gpu_ids)
@@ -111,6 +112,7 @@ def main(args):
 
     # Train
     log.info('Training...')
+    model.reset_parameters()
     with tqdm.tqdm(total=args.num_epochs) as progress_bar:
         for epoch in range(args.num_epochs):
 
@@ -175,6 +177,10 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             loss.backward()
 
             optimizer.step()
+            
+            # Need to project recurrent weight into feasible set
+            # This is not the feasible set but we haven't implemented it yet
+            projection_norm_inf(model.module.model.graph_layer.W.weight, 0.99 / 25)
 
             # Add batch data to the evaluation data
             y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())

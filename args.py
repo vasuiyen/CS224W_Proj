@@ -5,7 +5,6 @@ Command-line arguments for train.py, test.py.
 
 import argparse
 
-
 def get_train_args():
     """
     Get arguments needed in train.py.
@@ -19,7 +18,7 @@ def get_train_args():
                         '-n',
                         type=str,
                         choices=('GCN', 'RecurrentGraphNeuralNet'),
-                        required=True,
+                        default="RecurrentGraphNeuralNet",
                         help='Name of the class model. Also used to identify subdir or test run.')   
 
     parser.add_argument('--num_epochs',
@@ -82,8 +81,12 @@ def get_train_args():
     parser.add_argument('--loss_type',
                         type=str,
                         default='NLL',
-                        choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL'),
+                        choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL', 'CrossEntropy'),
                         help='Name of dev metric to determine best checkpoint.')
+    
+    parser.add_argument('--debug',
+                        action = 'store_true',
+                        help = "Turn on debugging for the RGNN")
     
 
     args = parser.parse_args()
@@ -112,7 +115,7 @@ def add_common_args(parser):
 
     parser.add_argument('--dataset',
                         type=str,
-                        choices=('ogbn-products', 'ogbn-arxiv'),
+                        choices=('ogbn-products', 'ogbn-arxiv', 'pyg-karate', 'pyg-cora'),
                         default='ogbn-products')
 
     parser.add_argument('--save_dir',

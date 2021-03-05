@@ -5,6 +5,7 @@ Created on Mon Mar  1 03:55:06 2021
 
 import numpy as np
 import scipy.sparse.linalg as linalg
+import networkx as nx
 
 import logging
 import os
@@ -52,6 +53,7 @@ def compute_spectral_radius(A, l = None):
     """
     v = np.ones(A.shape[0])
     eigenvalues, eigenvectors = linalg.eigs(A, k=2, sigma=l, which='LM', v0=v)
+    return eigenvalues
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -320,6 +322,39 @@ def get_logger(log_dir, name):
 
     return logger
 
+def load_pyg_dataset(dataset_name, root = 'dataset/'):
+    from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
+    source, name = dataset_name.split('-')
+    assert source in ['ogbn', 'pyg']
+    if source == 'ogbn':
+        dataset = PygNodePropPredDataset(name = dataset_name, root = root)
+        labels = dataset[0].y
+        return dataset, labels, dataset.get_idx_split(), Evaluator(dataset_name)
+    elif source == 'pyg':
+        from torch_geometric.datasets import KarateClub, CoraFull
+        if name == "karate":
+            dataset = KarateClub()
+        elif name == "cora":            
+            dataset = CoraFull(root)
+        else:
+            raise Exception("Dataset not recognized")
+        
+        num_nodes = dataset[0].x.shape[0]
+        num_train = int(num_nodes * 0.8)
+        num_val = int(num_nodes * 0.1)
+        
+        perm = np.arange(num_nodes, dtype=int)
+        np.random.shuffle(perm)
+        split_idx = {
+            'train': perm[:num_train], 
+            'valid': perm[num_train : num_train + num_val], 
+            'test': perm[num_train + num_val:]
+        }
+        labels = dataset[0].y.view(-1,1)
+        return dataset, labels, split_idx, Evaluator('ogbn-arxiv')
+    else:
+        raise Exception("Dataset not recognized")
+
 def build_deepsnap_dataset(pyg_dataset):
     """ Convert a torch geometric dataset to a DeepSnap dataset"""
     graphs = deepsnap.dataset.GraphDataset.pyg_to_graphs(pyg_dataset)
@@ -330,10 +365,10 @@ def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
 
     # DeepSNAP does not provide an API to use already existing splitting indices. 
     # Will submit a request at the end of the class
-    # In the menantime, long live debugging! Having our index based split for node prediction! 
-    graph = dataset.graphs[0]
+    # In the meantime, long live debugging! Having our index based split for node prediction! 
+    graph = dataset.graphs[0]   
+    graph.node_index = graph.node_label_index.clone()
     split_datasets = {}
-
     for split in ["train", "valid", "test"]:
         
         # shallow copy all attributes
@@ -345,7 +380,7 @@ def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
         dataset_new.graphs = [graph_new]
 
         split_datasets[split] = dataset_new
-    
+
     dataloaders = {}
     for split, ds in split_datasets.items():
         shuffle = False
@@ -361,6 +396,40 @@ def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
 
     return datasets, dataloaders
 
+
+def projection_norm_inf(A, kappa=0.99, transpose=False):
+    """ project onto ||A||_inf <= kappa return updated A"""
+    # TODO: speed up if needed
+    v = kappa
+    if transpose:
+        A_np = A.T.clone().detach().cpu().numpy()
+    else:
+        A_np = A.clone().detach().cpu().numpy()
+    x = np.abs(A_np).sum(axis=-1)
+    for idx in np.where(x > v)[0]:
+        # read the vector
+        a_orig = A_np[idx, :]
+        a_sign = np.sign(a_orig)
+        a_abs = np.abs(a_orig)
+        a = np.sort(a_abs)
+
+        s = np.sum(a) - v
+        l = float(len(a))
+        for i in range(len(a)):
+            # proposal: alpha <= a[i]
+            if s / l > a[i]:
+                s -= a[i]
+                l -= 1
+            else:
+                break
+        alpha = s / l
+        a = a_sign * np.maximum(a_abs - alpha, 0)
+        # verify
+        assert np.isclose(np.abs(a).sum(), v, atol=1e-4)
+        # write back
+        A_np[idx, :] = a
+    A.data.copy_(torch.tensor(A_np.T if transpose else A_np, dtype=A.dtype, device=A.device))
+    return A
 
 def str_to_attribute(obj, attr_name):
     try:
