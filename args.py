@@ -18,7 +18,7 @@ def get_train_args():
     parser.add_argument('--name',
                         '-n',
                         type=str,
-                        choices=('GCN, RecurrentGraphNeuralNet'),
+                        choices=('GCN', 'RecurrentGraphNeuralNet'),
                         required=True,
                         help='Name of the class model. Also used to identify subdir or test run.')   
 
