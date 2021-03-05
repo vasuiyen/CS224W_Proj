@@ -141,6 +141,7 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             out_channels = hidden_channels, 
             node_channels = node_channels, **kwargs)
         self.prediction_head = nn.Linear(hidden_channels, prediction_channels)
+        self.softmax = torch.nn.LogSoftmax(dim=-1)
         self.node_embedding = nn.Embedding(num_nodes, hidden_channels)
         # Manually turn off embedding training
         # We update the embeddings manually
@@ -182,7 +183,7 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             assert (x_orig - x).abs().sum() > 0
         self.node_embedding.weight[node_index] = x.detach()
         out = self.prediction_head(x)
-        return out
+        return self.softmax(out)
     
 class DeepSnapWrapper(torch.nn.Module):
     """
