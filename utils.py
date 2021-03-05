@@ -322,15 +322,22 @@ def get_logger(log_dir, name):
     return logger
 
 def load_pyg_dataset(dataset_name, root = 'dataset/'):
+    from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
     source, name = dataset_name.split('-')
     assert source in ['ogbn', 'pyg']
     if source == 'ogbn':
-        from ogb.nodeproppred import PygNodePropPredDataset
-        return PygNodePropPredDataset(name = dataset_name, root = root)
+        dataset = PygNodePropPredDataset(name = dataset_name, root = root)
+        labels = dataset[0].y
+        return dataset, labels, dataset.get_idx_split(), Evaluator(dataset_name)
     elif source == 'pyg':
         from torch_geometric.datasets import KarateClub
         if name == "karate":
-            return KarateClub()
+            dataset = KarateClub()
+            perm = np.arange(34, dtype=int)
+            np.random.shuffle(perm)
+            split_idx = {'train': perm[:22], 'valid': perm[22:28], 'test': perm[28:]}
+            labels = dataset[0].y.view(-1,1)
+            return dataset, labels, split_idx, Evaluator('ogbn-arxiv')
         else:
             raise Exception("Dataset not recognized")
     else:
@@ -348,7 +355,7 @@ def build_dataloaders(args, dataset, split_idx):
     # Will submit a request at the end of the class
     # In the meantime, long live debugging! Having our index based split for node prediction! 
     graph = dataset.graphs[0]   
-    graph.node_index = graph.node_label_index.clone().view(-1,1)
+    graph.node_index = graph.node_label_index.clone()
     split_datasets = {}
     for split in ["train", "valid", "test"]:
         

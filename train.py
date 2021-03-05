@@ -58,12 +58,9 @@ def main(args):
 
     # Get data loader
     log.info('Building dataset...')
-    # Download and process data at './dataset/xxx'
-    dataset = load_pyg_dataset(args.dataset)
-    labels = dataset[0].y
-    
-    split_idx = dataset.get_idx_split() 
-    evaluator = Evaluator(name = args.dataset)
+
+    # Refactored to allow KarateClub dataset
+    dataset, labels, split_idx, evaluator = load_pyg_dataset(args.dataset)
 
     dataset = build_deepsnap_dataset(dataset)
     dataloaders = build_dataloaders(args, dataset, split_idx) 
@@ -152,12 +149,11 @@ def train(model, data_loader, labels, idx, optimizer, device, evaluator, loss_ty
             # Forward
             out = model(batch)
             loss = isometricLoss(out[idx], torch.squeeze(labels[idx]), loss_type)
-
             # Backward
             loss.backward()
 
         optimizer.step()
-
+        
     results = evaluator.eval({
         'y_true': labels[idx],
         'y_pred': torch.argmax(out[idx], -1, keepdim=True)
