@@ -18,7 +18,7 @@ def get_train_args():
                         '-n',
                         type=str,
                         choices=('GCN', 'RecurrentGraphNeuralNet'),
-                        required=True,
+                        default="RecurrentGraphNeuralNet",
                         help='Name of the class model. Also used to identify subdir or test run.')   
 
     parser.add_argument('--num_epochs',

@@ -59,8 +59,9 @@ def main(args):
     # Get data loader
     log.info('Building dataset...')
     # Download and process data at './dataset/xxx'
-    dataset = PygNodePropPredDataset(name = args.dataset, root = 'dataset/')
+    dataset = load_pyg_dataset(args.dataset)
     labels = dataset[0].y
+    
     split_idx = dataset.get_idx_split() 
     evaluator = Evaluator(name = args.dataset)
 

@@ -321,6 +321,21 @@ def get_logger(log_dir, name):
 
     return logger
 
+def load_pyg_dataset(dataset_name, root = 'dataset/'):
+    source, name = dataset_name.split('-')
+    assert source in ['ogbn', 'pyg']
+    if source == 'ogbn':
+        from ogb.nodeproppred import PygNodePropPredDataset
+        return PygNodePropPredDataset(name = dataset_name, root = root)
+    elif source == 'pyg':
+        from torch_geometric.datasets import KarateClub
+        if name == "karate":
+            return KarateClub()
+        else:
+            raise Exception("Dataset not recognized")
+    else:
+        raise Exception("Dataset not recognized")
+
 def build_deepsnap_dataset(pyg_dataset):
     """ Convert a torch geometric dataset to a DeepSnap dataset"""
     graphs = deepsnap.dataset.GraphDataset.pyg_to_graphs(pyg_dataset)
@@ -335,7 +350,6 @@ def build_dataloaders(args, dataset, split_idx):
     graph = dataset.graphs[0]   
     graph.node_index = graph.node_label_index.clone().view(-1,1)
     split_datasets = {}
-
     for split in ["train", "valid", "test"]:
         
         # shallow copy all attributes
@@ -347,7 +361,7 @@ def build_dataloaders(args, dataset, split_idx):
         dataset_new.graphs = [graph_new]
 
         split_datasets[split] = dataset_new
-    
+
     dataloaders = {}
     for split, ds in split_datasets.items():
         shuffle = False
