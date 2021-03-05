@@ -38,6 +38,7 @@ from utils import *
 from losses import *
 from args import get_train_args
 
+from models import DataParallelWrapper
 
 def main(args):
 
@@ -69,7 +70,7 @@ def main(args):
     log.info('Building model...')
     model = build_model(args, dataset)
     
-    model = nn.DataParallel(model)
+    model = DataParallelWrapper(model)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model = load_model(model, args.load_path, args.gpu_ids)
@@ -153,6 +154,9 @@ def train(model, data_loader, labels, idx, optimizer, device, evaluator, loss_ty
             loss.backward()
 
         optimizer.step()
+        
+        # Need to project recurrent weight into feasible set
+        model.clamp(-1,1)
         
     results = evaluator.eval({
         'y_true': labels[idx],
