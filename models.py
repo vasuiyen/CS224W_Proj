@@ -109,6 +109,8 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         When training the model, initialize a random embedding for each node
         at the start. As the model is trained, the embedding will converge to
         a good embedding. 
+        
+        Includes softmax to be consistent with GCN implemented above
     
     Implemented based on Gu (2017), equation 1 https://arxiv.org/abs/2009.06211
     """
@@ -117,6 +119,7 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
              hidden_channels: int,
              prediction_channels: int,
              num_nodes: int,
+             return_embeds: bool = False,
              debug: bool = False,
              **kwargs):
         """        
@@ -128,6 +131,9 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             Dimension of prediction output
         @param num_nodes:
             Number of nodes in the graph
+            
+        return_embeds: if True, return a tuple of (hidden_state, output)
+        debug: if True, do some debug logging
         """       
         super(RecurrentGraphNeuralNet, self).__init__()
         self.graph_layer = GeneralGraphLayer(
@@ -135,11 +141,14 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             out_channels = hidden_channels, 
             node_channels = node_channels, **kwargs)
         self.prediction_head = nn.Linear(hidden_channels, prediction_channels)
-        self.node_embedding = nn.Embedding(num_nodes, hidden_channels, sparse=True)
+        self.node_embedding = nn.Embedding(num_nodes, hidden_channels)
         # Manually turn off embedding training
         # We update the embeddings manually
         self.node_embedding.weight.requires_grad = False
         self.debug = debug
+        
+        if debug:
+            print(f"Initializing RGNN with node_channels={node_channels}, hidden_channels={hidden_channels}, prediction_channels={prediction_channels}")
         
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
@@ -164,17 +173,13 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         if self.debug:
             x_orig = self.node_embedding(node_index)            
             print(f"Inputs: node_index shape {node_index.shape}, node_feature shape {node_feature.shape}")
-        
         x = self.node_embedding(node_index)
         x = self.graph_layer(x, node_feature, edge_index)
-        
         if self.debug:
             assert (x_orig - x).abs().sum() > 0
-        
-        # Manually update the embedding
-        self.node_embedding.weight[node_index] = x
-        y = self.prediction_head(x)
-        return x, y
+        self.node_embedding.weight[node_index] = x.detach()
+        out = self.prediction_head(x)
+        return out
     
 class DeepSnapWrapper(torch.nn.Module):
     """
