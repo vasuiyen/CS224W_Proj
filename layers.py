@@ -2,13 +2,32 @@
 """
 Created on Sun Feb 28 06:48:49 2021
 """
-
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
+from torch.cuda.amp import custom_bwd, custom_fwd
+
+class DifferentiableClamp(torch.autograd.Function):
+    """
+    In the forward pass this operation behaves like torch.clamp.
+    But in the backward pass its gradient is 1 everywhere, as if instead of clamp one had used the identity function.
+    
+    Reference: https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/6
+    """
+
+    @staticmethod
+    @custom_fwd
+    def forward(ctx, input, min, max):
+        return input.clamp(min=min, max=max)
+
+    @staticmethod
+    @custom_bwd
+    def backward(ctx, grad_output):
+        return grad_output.clone(), None, None
 
 class GeneralGraphLayer(MessagePassing):
     """ A general graph layer.  
@@ -40,6 +59,8 @@ class GeneralGraphLayer(MessagePassing):
         # E.g. if inputs are (num_nodes, node_dim) then node_dim = 0
         # Used in self.aggregate
         self.node_dim = node_dim
+        self.node_feature_bias = node_feature_bias
+        self.node_embedding_bias = node_embedding_bias
         
     def reset_parameters(self):
         """
@@ -48,13 +69,14 @@ class GeneralGraphLayer(MessagePassing):
         A recurrent neural net is infinitely deep. 
         Source: https://pouannes.github.io/blog/initialization/
         """
-        nn.init.kaiming_uniform_(self.phi.weight)
-        nn.init.kaiming_uniform_(self.W.weight)
+        stdv = 1. / math.sqrt(self.W.weight.shape[1])
+        self.W.weight.data.uniform_(-stdv, stdv)
+        self.phi.weight.data.uniform_(-stdv, stdv)
         if self.node_feature_bias: nn.init.uniform_(self.phi.bias)
         if self.node_embedding_bias: nn.init.uniform_(self.W.bias)
         
     def clamp(self, min, max):
-        torch.clamp(self.W.weight, min, max)
+        return DifferentiableClamp.apply(self.W.weight, min, max)
     
     def forward(self, x, u, edge_index):
         """
