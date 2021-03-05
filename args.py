@@ -81,7 +81,7 @@ def get_train_args():
     parser.add_argument('--loss_type',
                         type=str,
                         default='NLL',
-                        choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL'),
+                        choices=('L1', 'MSE', 'BCELogit', 'BCE', 'NLL', 'CrossEntropy'),
                         help='Name of dev metric to determine best checkpoint.')
     
     parser.add_argument('--hidden-dim',
