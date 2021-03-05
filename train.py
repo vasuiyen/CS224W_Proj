@@ -102,6 +102,7 @@ def main(args):
 
     # Train
     log.info('Training...')
+    model.reset_parameters()
     with tqdm.tqdm(total=args.num_epochs) as progress_bar:
         for epoch in range(args.num_epochs):
 
@@ -156,7 +157,8 @@ def train(model, data_loader, labels, idx, optimizer, device, evaluator, loss_ty
         optimizer.step()
         
         # Need to project recurrent weight into feasible set
-        model.clamp(-1,1)
+        # This is not the feasible set but we haven't implemented it yet
+        projection_norm_inf(model.module.model.graph_layer.W.weight, 0.99 / 25)
         
     results = evaluator.eval({
         'y_true': labels[idx],

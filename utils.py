@@ -53,6 +53,7 @@ def compute_spectral_radius(A, l = None):
     """
     v = np.ones(A.shape[0])
     eigenvalues, eigenvectors = linalg.eigs(A, k=2, sigma=l, which='LM', v0=v)
+    return eigenvalues
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -420,6 +421,40 @@ def build_model(args, dataset):
     model = model_class(dataset.num_node_features, dataset.num_node_labels, args)
 
     return model
+
+def projection_norm_inf(A, kappa=0.99, transpose=False):
+    """ project onto ||A||_inf <= kappa return updated A"""
+    # TODO: speed up if needed
+    v = kappa
+    if transpose:
+        A_np = A.T.clone().detach().cpu().numpy()
+    else:
+        A_np = A.clone().detach().cpu().numpy()
+    x = np.abs(A_np).sum(axis=-1)
+    for idx in np.where(x > v)[0]:
+        # read the vector
+        a_orig = A_np[idx, :]
+        a_sign = np.sign(a_orig)
+        a_abs = np.abs(a_orig)
+        a = np.sort(a_abs)
+
+        s = np.sum(a) - v
+        l = float(len(a))
+        for i in range(len(a)):
+            # proposal: alpha <= a[i]
+            if s / l > a[i]:
+                s -= a[i]
+                l -= 1
+            else:
+                break
+        alpha = s / l
+        a = a_sign * np.maximum(a_abs - alpha, 0)
+        # verify
+        assert np.isclose(np.abs(a).sum(), v, atol=1e-4)
+        # write back
+        A_np[idx, :] = a
+    A.data.copy_(torch.tensor(A_np.T if transpose else A_np, dtype=A.dtype, device=A.device))
+    return A
 
 def str_to_attribute(obj, attr_name):
     try:
