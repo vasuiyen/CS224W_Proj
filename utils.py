@@ -361,7 +361,7 @@ def build_deepsnap_dataset(pyg_dataset):
     dataset = deepsnap.dataset.GraphDataset(graphs, task='node')
     return dataset
 
-def build_dataloaders(args, dataset, split_idx):
+def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
 
     # DeepSNAP does not provide an API to use already existing splitting indices. 
     # Will submit a request at the end of the class
@@ -394,33 +394,8 @@ def build_dataloaders(args, dataset, split_idx):
                 shuffle=shuffle)
     
 
-    return dataloaders
+    return datasets, dataloaders
 
-
-def build_model(args, dataset):
-    """
-    Note: Hardcoded to use node features for now
-    """
-    # RGNN requires special handling
-    if args.name == "RecurrentGraphNeuralNet":
-        # Assume we are training on a dataset of 1 graph
-        assert len(dataset) == 1, "Recurrent GNN assumes we are training on a dataset of size 1"
-        num_nodes = dataset[0].node_label_index.shape[0]
-        from models import RecurrentGraphNeuralNet, DeepSnapWrapper
-        model = RecurrentGraphNeuralNet(
-            node_channels=dataset.num_node_features, 
-            hidden_channels=args.hidden_dim, 
-            prediction_channels=dataset.num_node_labels, 
-            num_nodes=num_nodes,
-            debug=args.debug)
-        model = DeepSnapWrapper(model)
-        return model 
-
-    # Create the model, optimizer and checkpoint
-    model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(dataset.num_node_features, dataset.num_node_labels, args)
-
-    return model
 
 def projection_norm_inf(A, kappa=0.99, transpose=False):
     """ project onto ||A||_inf <= kappa return updated A"""

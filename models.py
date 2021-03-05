@@ -68,7 +68,7 @@ class GCN(torch.nn.Module):
 
         out = None
 
-        x, adj_t = data.node_feature, data.edge_index
+        x, adj_t = data.x, data.edge_index
 
         ############# Your code here ############
         ## Note:
