@@ -154,6 +154,9 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
         self.node_embedding.reset_parameters()
+        
+    def clamp(self, min, max):
+        self.graph_layer.clamp(min, max)
     
     def forward(self, node_index, node_feature, edge_index):
         """        
@@ -196,6 +199,9 @@ class DeepSnapWrapper(torch.nn.Module):
         
     def reset_parameters(self):
         self.model.reset_parameters()
+        
+    def clamp(self, min, max):
+        self.model.clamp(min, max)
     
     def forward(self, batch):
         """        
@@ -206,3 +212,12 @@ class DeepSnapWrapper(torch.nn.Module):
         node_feature = batch.node_feature
         edge_index = batch.edge_index
         return self.model(node_index, node_feature, edge_index)
+    
+    
+class DataParallelWrapper(torch.nn.DataParallel):  
+    """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
+    def reset_parameters(self):
+        self.module.reset_parameters()
+    def clamp(self, min, max):
+        self.module.clamp(min, max)
+    
