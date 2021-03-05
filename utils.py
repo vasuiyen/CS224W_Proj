@@ -330,16 +330,27 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
         labels = dataset[0].y
         return dataset, labels, dataset.get_idx_split(), Evaluator(dataset_name)
     elif source == 'pyg':
-        from torch_geometric.datasets import KarateClub
+        from torch_geometric.datasets import KarateClub, CoraFull
         if name == "karate":
             dataset = KarateClub()
-            perm = np.arange(34, dtype=int)
-            np.random.shuffle(perm)
-            split_idx = {'train': perm[:22], 'valid': perm[22:28], 'test': perm[28:]}
-            labels = dataset[0].y.view(-1,1)
-            return dataset, labels, split_idx, Evaluator('ogbn-arxiv')
+        elif name == "cora":            
+            dataset = CoraFull(root)
         else:
             raise Exception("Dataset not recognized")
+        
+        num_nodes = dataset[0].x.shape[0]
+        num_train = int(num_nodes * 0.8)
+        num_val = int(num_nodes * 0.1)
+        
+        perm = np.arange(num_nodes, dtype=int)
+        np.random.shuffle(perm)
+        split_idx = {
+            'train': perm[:num_train], 
+            'valid': perm[num_train : num_train + num_val], 
+            'test': perm[num_train + num_val:]
+        }
+        labels = dataset[0].y.view(-1,1)
+        return dataset, labels, split_idx, Evaluator('ogbn-arxiv')
     else:
         raise Exception("Dataset not recognized")
 
