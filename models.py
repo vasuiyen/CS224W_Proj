@@ -172,7 +172,7 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
         self.node_embedding.reset_parameters()
 
     def project_recurrent_weight(self, kappa):
-        projection_norm_inf(self.model.graph_layer.W.weight, 0.99 / 25)
+        projection_norm_inf(self.model.graph_layer.W.weight, kappa)
         
     def clamp(self, min, max):
         self.graph_layer.clamp(min, max)
