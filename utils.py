@@ -52,8 +52,8 @@ def compute_spectral_radius(A, l = None):
     https://scicomp.stackexchange.com/questions/21727/numerical-computation-of-perron-frobenius-eigenvector
     """
     v = np.ones(A.shape[0])
-    eigenvalues, eigenvectors = linalg.eigs(A, k=2, sigma=l, which='LM', v0=v)
-    return eigenvalues
+    eigenvalues, eigenvectors = linalg.eigsh(A, k=1, sigma=l, which='LM', v0=v)
+    return eigenvalues.item()
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -359,13 +359,13 @@ def build_deepsnap_dataset(pyg_dataset):
     dataset = deepsnap.dataset.GraphDataset(graphs, task='node')
     return dataset
 
-def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
+def split_and_build_data_sets_and_loaders(args, dataset, split_idx):
 
     # DeepSNAP does not provide an API to use already existing splitting indices. 
     # Will submit a request at the end of the class
     # In the meantime, long live debugging! Having our index based split for node prediction! 
     graph = dataset.graphs[0]   
-    graph.node_index = graph.node_label_index.clone()
+    # graph.node_index = graph.node_label_index.clone()
     split_datasets = {}
     for split in ["train", "valid", "test"]:
         
@@ -392,7 +392,7 @@ def split_and_build_datal_sets_and_loaders(args, dataset, split_idx):
                 shuffle=shuffle)
     
 
-    return datasets, dataloaders
+    return split_datasets, dataloaders
 
 
 def projection_norm_inf(A, kappa=0.99, transpose=False):

@@ -57,8 +57,6 @@ def main(args):
     
     # Refactored to allow KarateClub dataset
     dataset, split_idx, evaluator = load_pyg_dataset(args.dataset)
-
-    split_idx = dataset.get_idx_split() 
     data = dataset[0]
 
     # Convert split indices to boolean masks and add them to `data`.
@@ -78,7 +76,7 @@ def main(args):
 
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(data.num_node_features, dataset.num_classes, args, log, num_nodes=dataset[0].num_nodes)
+    model = model_class(data.num_node_features, dataset.num_classes, args, log)
     
     model = DataParallelWrapper(model)
     if args.load_path:
@@ -156,7 +154,6 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
 
     with torch.enable_grad():
         for batch in data_loader:
-            
             batch = batch.to(device)
             batch_size = batch.train_mask.sum().item()
 
@@ -164,23 +161,18 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
                 continue
             
             optimizer.zero_grad()
-
+            
             # Forward
-            out = model(torch.squeeze(torch.nonzero(batch.train_mask == True, as_tuple=False), dim=-1), batch)[batch.train_mask]
-            labels = batch.y.squeeze(1)[batch.train_mask]
-
+            out = model(batch)[batch.train_mask]
+            labels = batch.y.squeeze()[batch.train_mask]
+            
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, loss_type)
             loss_meter.update(loss.item(), batch_size)
-
+            
             # Backward
             loss.backward()
-
             optimizer.step()
-            
-            # Need to project recurrent weight into feasible set
-            # This is not the feasible set but we haven't implemented it yet
-            model.project_recurrent_weight(0.99 / 25)
 
             # Add batch data to the evaluation data
             y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
@@ -215,8 +207,8 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
                 continue
 
             # Forward
-            out = model((batch.valid_mask == True).nonzero(), batch)[batch.valid_mask]
-            labels = batch.y.squeeze(1)[batch.valid_mask]
+            out = model(batch)[batch.valid_mask]
+            labels = batch.y.squeeze()[batch.valid_mask]
 
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, loss_type)

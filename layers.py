@@ -11,24 +11,6 @@ import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch.cuda.amp import custom_bwd, custom_fwd
 
-class DifferentiableClamp(torch.autograd.Function):
-    """
-    In the forward pass this operation behaves like torch.clamp.
-    But in the backward pass its gradient is 1 everywhere, as if instead of clamp one had used the identity function.
-    
-    Reference: https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/6
-    """
-
-    @staticmethod
-    @custom_fwd
-    def forward(ctx, input, min, max):
-        return input.clamp(min=min, max=max)
-
-    @staticmethod
-    @custom_bwd
-    def backward(ctx, grad_output):
-        return grad_output.clone(), None, None
-
 class GeneralGraphLayer(MessagePassing):
     """ A general graph layer.  
     
@@ -64,9 +46,9 @@ class GeneralGraphLayer(MessagePassing):
         
     def reset_parameters(self):
         """
-        Use Kaiming initialization.
-        Greatly improves convergence for deep nets using ReLU.
-        A recurrent neural net is infinitely deep. 
+        Use same initialization as original implementation.
+        
+        TODO: Test Kaiming initialization instead which should be a lot better. 
         Source: https://pouannes.github.io/blog/initialization/
         """
         stdv = 1. / math.sqrt(self.W.weight.shape[1])
@@ -74,9 +56,6 @@ class GeneralGraphLayer(MessagePassing):
         self.phi.weight.data.uniform_(-stdv, stdv)
         if self.node_feature_bias: nn.init.uniform_(self.phi.bias)
         if self.node_embedding_bias: nn.init.uniform_(self.W.bias)
-        
-    def clamp(self, min, max):
-        return DifferentiableClamp.apply(self.W.weight, min, max)
     
     def forward(self, x, u, edge_index):
         """

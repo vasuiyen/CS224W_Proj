@@ -6,6 +6,10 @@ import logging
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import GCNConv
+from torch_geometric.utils.convert import to_scipy_sparse_matrix
+from scipy.sparse import coo_matrix
+
+import numpy as np
 
 from layers import *
 from utils import *
@@ -74,7 +78,7 @@ class GCN(torch.nn.Module):
     def project_recurrent_weight(self, kappa):
         pass
 
-    def forward(self, node_index, data):
+    def forward(self, data):
         # TODO: Implement this function that takes the feature tensor x,
         # edge_index tensor adj_t and returns the output tensor as
         # shown in the figure.
@@ -108,7 +112,7 @@ class GCN(torch.nn.Module):
 
         return out
 
-class RecurrentGraphNeuralNet(torch.nn.Module):
+class ImplicitGraphNeuralNet(torch.nn.Module):
     """ 
     Recurrent graph neural net model. 
     
@@ -138,72 +142,62 @@ class RecurrentGraphNeuralNet(torch.nn.Module):
             Node feature dimension
         @param output_dim: 
             Dimension of prediction output
-        @param num_nodes:
-            Number of nodes in the graph
             
         debug: if True, do some debug logging
         """       
-        super(RecurrentGraphNeuralNet, self).__init__()
+        super(ImplicitGraphNeuralNet, self).__init__()
+        
 
-        num_nodes = kwargs.pop('num_nodes')
+        self.node_channels = input_dim
+        self.hidden_channels = args.hidden_dim
+        self.tol = args.tol
+        self.kappa = args.kappa
+        self.max_iters = args.max_forward_iterations
 
+        # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
             in_channels = args.hidden_dim, 
             out_channels = args.hidden_dim, 
             node_channels = input_dim, 
             **kwargs
         )
-
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
-        self.softmax = torch.nn.LogSoftmax(dim=-1)
-        self.node_embedding = nn.Embedding(num_nodes, args.hidden_dim)
-
-        # Manually turn off embedding training
-        # We update the embeddings manually
-        self.node_embedding.weight.requires_grad = False
+        self.softmax = torch.nn.LogSoftmax(dim=-1)        
 
         self.log = log
-        
-        self.log.debug(f"Initializing RGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
+        self.log.debug(f"Initializing IGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
         
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
-        self.node_embedding.reset_parameters()
 
-    def project_recurrent_weight(self, kappa):
-        projection_norm_inf(self.model.graph_layer.W.weight, kappa)
-        
-    def clamp(self, min, max):
-        self.graph_layer.clamp(min, max)
+    def project_recurrent_weight(self, spectral_radius):
+        projection_norm_inf(self.graph_layer.W.weight, self.kappa / spectral_radius)
     
-    def forward(self, node_index, data):
+    def forward(self, data):
         """        
-        @param node_index: 
-            Indices of the nodes being passed in.
-            Shape: (batch_size, 1)
-        @param u: 
-            Base node features. 
-            Shape: (batch_size, node_channels)
-        @param edge_index: 
-            A tensor containing (source, target) node indexes
-            Shape: (2, num_edges)
+        @param data: Graph object
             
-        @return y: Model outputs at step T+1. 
+        @return y: Model outputs after convergence.
         """
-        # testing code
-
         node_feature, edge_index = data.x, data.edge_index
+        num_nodes = node_feature.shape[0]
         
-        x = self.node_embedding(node_index)
-        x = self.graph_layer(x, node_feature, edge_index)
+        # Convert edge_index to sparse adjacency matrix
+        row, col = edge_index.cpu()
+        edge_attr = np.ones(row.size(0))
+        adj_matrix = coo_matrix((edge_attr, (row, col)), (num_nodes, num_nodes))
+        spectral_radius = compute_spectral_radius(adj_matrix)
 
-        if self.log.level <= logging.DEBUG:
-            self.log.debug(f"Inputs: node_index shape {node_index.shape}, node_feature shape {node_feature.shape}")
-            x_orig = self.node_embedding(node_index)
-            assert (x_orig - x).abs().sum() > 0
-
-        self.node_embedding.weight[node_index] = x.detach()
+        self.project_recurrent_weight(spectral_radius)
+        # Use zeros to initialize embeddings
+        x_old = torch.zeros((num_nodes, self.hidden_channels)).to(node_feature.device)
+        # Train embeddings to convergence; this constitutes 1 forward pass
+        for it in range(self.max_iters):
+            x = self.graph_layer(x_old, node_feature, edge_index)
+            if (x - x_old).abs().min() < self.tol:
+                break
+            x_old = x
         out = self.prediction_head(x)
         return self.softmax(out)
 
@@ -212,12 +206,5 @@ class DataParallelWrapper(torch.nn.DataParallel):
     def reset_parameters(self):
         self.module.reset_parameters()
 
-    def project_recurrent_weight(self, kappa):
-        self.module.project_recurrent_weight(kappa)
-
-    def clamp(self, min, max):
-        try:
-            self.module.clamp(min, max)
-        except:
-            # GCNs don't need clamping
-            return
+    def project_recurrent_weight(self):
+        self.module.project_recurrent_weight()
