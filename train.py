@@ -82,7 +82,10 @@ def main(args):
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model = load_model(model, args.load_path, args.gpu_ids)
-    
+    else:
+        # Reset parameters only if not loading from checkpoint
+        model.reset_parameters()
+
     model = model.to(device)
     model.train()
 
@@ -110,7 +113,6 @@ def main(args):
 
     # Train
     log.info('Training...')
-    model.reset_parameters()
     with tqdm.tqdm(total=args.num_epochs) as progress_bar:
         for epoch in range(args.num_epochs):
 
