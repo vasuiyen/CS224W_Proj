@@ -17,8 +17,8 @@ def get_train_args():
     parser.add_argument('--name',
                         '-n',
                         type=str,
-                        choices=('GCN', 'RecurrentGraphNeuralNet'),
-                        default="RecurrentGraphNeuralNet",
+                        choices=('GCN', 'ImplicitGraphNeuralNet'),
+                        default="ImplicitGraphNeuralNet",
                         help='Name of the class model. Also used to identify subdir or test run.')   
 
     parser.add_argument('--num_epochs',
@@ -88,6 +88,19 @@ def get_train_args():
                         action = 'store_true',
                         help = "Turn on debugging for the RGNN")
     
+    parser.add_argument('--kappa', 
+                        type=float,
+                        default=0.99,
+                        help="Control size of feasible set. Must be less than 1.0")
+    parser.add_argument('--max_forward_iterations', 
+                        type=int,
+                        default=100,
+                        help="Max number of recurrent iterations per forward pass")
+    parser.add_argument('--tol', 
+                        type=float,
+                        default=3e-6,
+                        help="Tolerance to determine convergence of embeddings")
+        
 
     args = parser.parse_args()
 
