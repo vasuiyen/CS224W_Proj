@@ -75,9 +75,6 @@ class GCN(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def project_recurrent_weight(self, kappa):
-        pass
-
     def forward(self, data):
         # TODO: Implement this function that takes the feature tensor x,
         # edge_index tensor adj_t and returns the output tensor as
@@ -205,6 +202,3 @@ class DataParallelWrapper(torch.nn.DataParallel):
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
     def reset_parameters(self):
         self.module.reset_parameters()
-
-    def project_recurrent_weight(self):
-        self.module.project_recurrent_weight()
