@@ -68,7 +68,7 @@ def main(args):
     cluster_data = ClusterData(data, num_parts=args.num_partitions,
                                recursive=False, save_dir=dataset.processed_dir)
 
-    dataset_loader = ClusterLoaderWithOrigNodeIndex(cluster_data, batch_size=args.batch_size,
+    dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
                            shuffle=args.data_shuffle, num_workers=args.num_workers)
 
     # Get model

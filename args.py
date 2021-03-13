@@ -38,7 +38,7 @@ def get_train_args():
 
     parser.add_argument('--weight_decay',
                         type=float,
-                        default=0.0001,
+                        default=0.0000,
                         help='Learning rate.')
 
     parser.add_argument('--metric_name',
@@ -75,7 +75,7 @@ def get_train_args():
 
     parser.add_argument('--drop_prob',
                         type=int,
-                        default=0.3,
+                        default=0.5,
                         help='Dropout probability.')
 
     parser.add_argument('--loss_type',
@@ -90,7 +90,7 @@ def get_train_args():
     
     parser.add_argument('--kappa', 
                         type=float,
-                        default=0.99,
+                        default=0.95,
                         help="Control size of feasible set. Must be less than 1.0")
     parser.add_argument('--max_forward_iterations', 
                         type=int,
