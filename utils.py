@@ -91,9 +91,6 @@ class CustomClusterLoader(ClusterLoader):
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix
 
-        # Attach the adjacency matrix spectral radius
-        data['spectral_radius'] = compute_spectral_radius(adj_matrix)
-
         # Return the enhanced data
         return data
         

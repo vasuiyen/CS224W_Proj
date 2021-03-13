@@ -153,6 +153,8 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.drop_prob = args.drop_prob
         num_nodes = kwargs.pop('num_nodes')
 
+        self.spectral_radius_dict = {}
+
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
             in_channels = args.hidden_dim, 
@@ -179,8 +181,17 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             
         @return y: Model outputs after convergence.
         """
-        node_index, node_feature, edge_index, adj_matrix, spectral_radius = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix, data.spectral_radius
+        node_index, node_feature, edge_index, adj_matrix = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
         num_nodes = node_feature.shape[0]
+
+        if hasattr(data, 'batch_index'):
+            if data.batch_index not in self.spectral_radius_dict:
+                self.spectral_radius_dict[data.batch_index] = compute_spectral_radius(adj_matrix)
+
+            spectral_radius = self.spectral_radius_dict.get(data.batch_index)
+                
+        else:
+            spectral_radius = compute_spectral_radius(adj_matrix)
         
         self.project_recurrent_weight(spectral_radius)
 
