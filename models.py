@@ -236,6 +236,7 @@ class IGNN(nn.Module):
         kappa = args.kappa
         num_node = kwargs.pop('num_nodes')
 
+        self.adj_rho = {}
 
         #one layer with V
         self.ig1 = ImplicitGraph(nfeat, nhid, num_node, kappa)
@@ -245,17 +246,25 @@ class IGNN(nn.Module):
 
     def forward(self, data):
 
-        node_index, features, edge_index, adj, adj_rho = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix, data.spectral_radius
+        node_index, features, edge_index, adj = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
         num_nodes = features.shape[0]
 
         X_0 = self.X_0.data[:, node_index]
+
+        if hasattr(data, 'batch_index'):
+            if data.batch_index not in self.adj_rho:
+                self.adj_rho[data.batch_index] = compute_spectral_radius(adj)
+
+            adj_rho = self.adj_rho.get(data.batch_index)
+                
+        else:
+            adj_rho = compute_spectral_radius(adj_matrix)
 
         # Convert adjacency matrix to torch tensor
         adj = torch.sparse.FloatTensor(
             torch.LongTensor(np.vstack((adj.row, adj.col))),
             torch.FloatTensor(adj.data),
             adj.shape).to(features.device)
-
 
         x = torch.transpose(features, 0, 1)
         x = self.ig1(X_0, adj, x, F.relu, adj_rho, A_orig=self.adj_orig).T
