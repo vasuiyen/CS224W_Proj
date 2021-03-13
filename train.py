@@ -155,7 +155,10 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
     y_pred = []
 
     with torch.enable_grad():
-        for batch in data_loader:
+        for idx, batch in enumerate(data_loader):
+
+            batch['batch_index'] = idx
+
             batch = batch.to(device)
             batch_size = batch.train_mask.sum().item()
 
@@ -200,8 +203,10 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
     y_pred = []
 
     with torch.enable_grad():
-        for batch in data_loader:
+        for idx, batch in enumerate(data_loader):
             
+            batch['batch_index'] = idx
+
             batch = batch.to(device)
             batch_size = batch.valid_mask.sum().item()
 
