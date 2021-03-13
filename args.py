@@ -17,7 +17,7 @@ def get_train_args():
     parser.add_argument('--name',
                         '-n',
                         type=str,
-                        choices=('GCN', 'ImplicitGraphNeuralNet'),
+                        choices=('GCN', 'ImplicitGraphNeuralNet', 'IGNN'),
                         default="ImplicitGraphNeuralNet",
                         help='Name of the class model. Also used to identify subdir or test run.')   
 
