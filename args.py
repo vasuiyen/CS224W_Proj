@@ -38,7 +38,7 @@ def get_train_args():
 
     parser.add_argument('--weight_decay',
                         type=float,
-                        default=0.0001,
+                        default=0.0000,
                         help='Learning rate.')
 
     parser.add_argument('--metric_name',
@@ -73,10 +73,10 @@ def get_train_args():
                         default=True,
                         help='Whether to use learn rate scheduler.')                     
 
-    parser.add_argument('--dropout',
+    parser.add_argument('--drop_prob',
                         type=int,
-                        default=0.3,
-                        help='Maximum number of checkpoints to keep on disk.')
+                        default=0.5,
+                        help='Dropout probability.')
 
     parser.add_argument('--loss_type',
                         type=str,
@@ -90,7 +90,7 @@ def get_train_args():
     
     parser.add_argument('--kappa', 
                         type=float,
-                        default=0.99,
+                        default=0.95,
                         help="Control size of feasible set. Must be less than 1.0")
     parser.add_argument('--max_forward_iterations', 
                         type=int,
@@ -159,12 +159,12 @@ def add_train_test_args(parser):
 
     parser.add_argument('--num_partitions',
                         type=int,
-                        default=2**13,
+                        default=2**14,
                         help='The number of partitions.')
 
     parser.add_argument('--batch_size',
                         type=int,
-                        default=2048,
+                        default=512,
                         help='Batch size per GPU. Scales automatically when \
                                   multiple GPUs are available.')
 

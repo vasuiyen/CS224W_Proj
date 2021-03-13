@@ -68,7 +68,7 @@ def main(args):
     cluster_data = ClusterData(data, num_parts=args.num_partitions,
                                recursive=False, save_dir=dataset.processed_dir)
 
-    dataset_loader = ClusterLoader(cluster_data, batch_size=args.batch_size,
+    dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
                            shuffle=args.data_shuffle, num_workers=args.num_workers)
 
     # Get model
@@ -76,7 +76,7 @@ def main(args):
 
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(data.num_node_features, dataset.num_classes, args, log)
+    model = model_class(data.num_node_features, dataset.num_classes, args, log, num_nodes=data.num_nodes)
     
     model = DataParallelWrapper(model)
     if args.load_path:
