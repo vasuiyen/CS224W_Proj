@@ -163,15 +163,6 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         self.softmax = torch.nn.LogSoftmax(dim=-1)
 
-        self.node_embedding = nn.Embedding(num_nodes, args.hidden_dim)
-
-        # Use zeros to initialize embeddings
-        self.node_embedding.weight.data.fill_(0)
-
-        # Manually turn off embedding training
-        # We update the embeddings manually
-        self.node_embedding.weight.requires_grad = False        
-
         self.log = log
         self.log.debug(f"Initializing IGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
         
@@ -188,28 +179,23 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             
         @return y: Model outputs after convergence.
         """
-        node_index, node_feature, edge_index = data.orig_node_idx, data.x, data.edge_index
+        node_index, node_feature, edge_index, adj_matrix, spectral_radius = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix, data.spectral_radius
         num_nodes = node_feature.shape[0]
         
-        # Convert edge_index to sparse adjacency matrix
-        row, col = edge_index.cpu()
-        edge_attr = np.ones(row.size(0))
-        adj_matrix = coo_matrix((edge_attr, (row, col)), (num_nodes, num_nodes))
-        spectral_radius = compute_spectral_radius(adj_matrix)
-
         self.project_recurrent_weight(spectral_radius)
 
-        x = self.node_embedding(node_index)
+        # Use zeros to initialize embeddings
+        x = torch.zeros((num_nodes, self.hidden_channels)).to(node_feature.device)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        for _ in range(self.max_iters):
+        for it in range(self.max_iters):
             x_new = self.graph_layer(x, node_feature, edge_index)
+            err = torch.norm(x_new - x, np.inf)
             if torch.norm(x_new - x, np.inf) < self.tol:
-                del x_new
                 break
-
             x = x_new
-            del x_new
+            if it == self.max_iters - 1:
+                self.log.info(f"Didn't converge: {err}")
 
         x = F.dropout(x, self.drop_prob, training=self.training)
 

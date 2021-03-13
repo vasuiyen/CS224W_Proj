@@ -6,6 +6,8 @@ Created on Mon Mar  1 03:55:06 2021
 import numpy as np
 import scipy.sparse.linalg as linalg
 import networkx as nx
+import scipy.sparse as sp
+from scipy.sparse import coo_matrix
 
 import logging
 import os
@@ -56,10 +58,10 @@ def compute_spectral_radius(A, l = None):
     eigenvalues, eigenvectors = linalg.eigsh(A, k=1, sigma=l, which='LM', v0=v)
     return eigenvalues.item()
 
-class ClusterLoaderWithOrigNodeIndex(ClusterLoader):
+class CustomClusterLoader(ClusterLoader):
 
     def __init__(self, cluster_data, **kwargs):
-        super(ClusterLoaderWithOrigNodeIndex,
+        super(CustomClusterLoader,
               self).__init__(cluster_data, **kwargs)
 
     def __collate__(self, batch):
@@ -75,10 +77,24 @@ class ClusterLoaderWithOrigNodeIndex(ClusterLoader):
         end = self.cluster_data.partptr[batch + 1].tolist()
         node_idx = torch.cat([torch.arange(s, e) for s, e in zip(start, end)])
 
-        # Attach the node indexes to data
+        # Attach the node indexes to the data
         data['orig_node_idx'] = node_idx
 
-        # Return the data enhanced with the original node indexes contained in the cluster graph
+        # Convert edge_index to sparse adjacency matrix
+        row, col = data.edge_index
+        edge_attr = np.ones(row.size(0))
+        adj_matrix = coo_matrix((edge_attr, (row, col)), (data.num_nodes, data.num_nodes))
+
+        # Normalize the adjacency matrix
+        adj_matrix = aug_normalized_adjacency(adj_matrix)
+
+        # Attach the adjacency matrix to the data
+        data['adj_matrix'] = adj_matrix
+
+        # Attach the adjacency matrix spectral radius
+        data['spectral_radius'] = compute_spectral_radius(adj_matrix)
+
+        # Return the enhanced data
         return data
         
 
@@ -462,3 +478,14 @@ def str_to_attribute(obj, attr_name):
         return identifier
     except AttributeError:
         raise NameError("%s doesn't exist." % attr_name)
+
+
+def aug_normalized_adjacency(adj, need_orig=False):
+   if not need_orig:
+       adj = adj + sp.eye(adj.shape[0])
+   adj = sp.coo_matrix(adj)
+   row_sum = np.array(adj.sum(1))
+   d_inv_sqrt = np.power(row_sum, -0.5).flatten()
+   d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+   d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+   return d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt).tocoo()
