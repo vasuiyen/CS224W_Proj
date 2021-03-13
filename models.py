@@ -150,6 +150,8 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.tol = args.tol
         self.kappa = args.kappa
         self.max_iters = args.max_forward_iterations
+        self.drop_prob = args.drop_prob
+        num_nodes = kwargs.pop('num_nodes')
 
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
@@ -159,7 +161,16 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             **kwargs
         )
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
-        self.softmax = torch.nn.LogSoftmax(dim=-1)        
+        self.softmax = torch.nn.LogSoftmax(dim=-1)
+
+        self.node_embedding = nn.Embedding(num_nodes, args.hidden_dim)
+
+        # Use zeros to initialize embeddings
+        self.node_embedding.weight.data.fill_(0)
+
+        # Manually turn off embedding training
+        # We update the embeddings manually
+        self.node_embedding.weight.requires_grad = False        
 
         self.log = log
         self.log.debug(f"Initializing IGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
@@ -177,7 +188,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             
         @return y: Model outputs after convergence.
         """
-        node_feature, edge_index = data.x, data.edge_index
+        node_index, node_feature, edge_index = data.orig_node_idx, data.x, data.edge_index
         num_nodes = node_feature.shape[0]
         
         # Convert edge_index to sparse adjacency matrix
@@ -187,14 +198,21 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         spectral_radius = compute_spectral_radius(adj_matrix)
 
         self.project_recurrent_weight(spectral_radius)
-        # Use zeros to initialize embeddings
-        x_old = torch.zeros((num_nodes, self.hidden_channels)).to(node_feature.device)
+
+        x = self.node_embedding(node_index)
+        
         # Train embeddings to convergence; this constitutes 1 forward pass
-        for it in range(self.max_iters):
-            x = self.graph_layer(x_old, node_feature, edge_index)
-            if (x - x_old).abs().min() < self.tol:
+        for _ in range(self.max_iters):
+            x_new = self.graph_layer(x, node_feature, edge_index)
+            if torch.norm(x_new - x, np.inf) < self.tol:
+                del x_new
                 break
-            x_old = x
+
+            x = x_new
+            del x_new
+
+        x = F.dropout(x, self.drop_prob, training=self.training)
+
         out = self.prediction_head(x)
         return self.softmax(out)
 

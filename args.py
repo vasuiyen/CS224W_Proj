@@ -73,10 +73,10 @@ def get_train_args():
                         default=True,
                         help='Whether to use learn rate scheduler.')                     
 
-    parser.add_argument('--dropout',
+    parser.add_argument('--drop_prob',
                         type=int,
                         default=0.3,
-                        help='Maximum number of checkpoints to keep on disk.')
+                        help='Dropout probability.')
 
     parser.add_argument('--loss_type',
                         type=str,
@@ -159,12 +159,12 @@ def add_train_test_args(parser):
 
     parser.add_argument('--num_partitions',
                         type=int,
-                        default=2**13,
+                        default=2**14,
                         help='The number of partitions.')
 
     parser.add_argument('--batch_size',
                         type=int,
-                        default=2048,
+                        default=512,
                         help='Batch size per GPU. Scales automatically when \
                                   multiple GPUs are available.')
 

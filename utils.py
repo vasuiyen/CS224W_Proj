@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
+from torch_geometric.data.cluster import ClusterLoader
 import tqdm
 import deepsnap
 import copy
@@ -54,6 +55,32 @@ def compute_spectral_radius(A, l = None):
     v = np.ones(A.shape[0])
     eigenvalues, eigenvectors = linalg.eigsh(A, k=1, sigma=l, which='LM', v0=v)
     return eigenvalues.item()
+
+class ClusterLoaderWithOrigNodeIndex(ClusterLoader):
+
+    def __init__(self, cluster_data, **kwargs):
+        super(ClusterLoaderWithOrigNodeIndex,
+              self).__init__(cluster_data, **kwargs)
+
+    def __collate__(self, batch):
+        
+        # Call parent's collate function
+        data = super().__collate__(batch)
+        
+        # Get the node indexes from batch
+        if not isinstance(batch, torch.Tensor):
+            batch = torch.tensor(batch)
+
+        start = self.cluster_data.partptr[batch].tolist()
+        end = self.cluster_data.partptr[batch + 1].tolist()
+        node_idx = torch.cat([torch.arange(s, e) for s, e in zip(start, end)])
+
+        # Attach the node indexes to data
+        data['orig_node_idx'] = node_idx
+
+        # Return the data enhanced with the original node indexes contained in the cluster graph
+        return data
+        
 
 class AverageMeter:
     """Keep track of average values over time.
