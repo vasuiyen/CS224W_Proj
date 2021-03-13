@@ -234,21 +234,12 @@ class IGNN(nn.Module):
 
     def forward(self, data):
 
-        node_index, features, edge_index = data.orig_node_idx, data.x, data.edge_index
+        node_index, features, edge_index, adj, adj_rho = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix, data.spectral_radius
         num_nodes = features.shape[0]
-
-        # Convert edge_index to sparse adjacency matrix
-        row, col = edge_index.cpu()
-        edge_attr = np.ones(row.size(0))
-        adj = coo_matrix((edge_attr, (row, col)), (num_nodes, num_nodes))
-
-        if adj is not self.adj:
-            self.adj = adj
-            self.adj_rho = compute_spectral_radius(adj)
 
         X_0 = self.X_0.data[:, node_index]
 
-        # Convert adjancy matrix to torch tensor
+        # Convert adjacency matrix to torch tensor
         adj = torch.sparse.FloatTensor(
             torch.LongTensor(np.vstack((adj.row, adj.col))),
             torch.FloatTensor(adj.data),
@@ -256,7 +247,7 @@ class IGNN(nn.Module):
 
 
         x = torch.transpose(features, 0, 1)
-        x = self.ig1(X_0, adj, x, F.relu, self.adj_rho, A_orig=self.adj_orig).T
+        x = self.ig1(X_0, adj, x, F.relu, adj_rho, A_orig=self.adj_orig).T
         x = F.dropout(x, self.dropout, training=self.training)
         x = self.V(x)
         return x
