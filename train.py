@@ -125,7 +125,7 @@ def main(args):
 
             # Visualize in TensorBoard
             for k, v in train_results.items():
-                tboard.add_scalar('train/{k}', v, epoch)
+                tboard.add_scalar(f'train/{k}', v, epoch)
 
             # Evaluate, display the stats and save the model
             dev_results = evaluate(model, dataset_loader, device, evaluator, args.loss_type)
@@ -138,7 +138,7 @@ def main(args):
 
             # Visualize in TensorBoard
             for k, v in dev_results.items():
-                tboard.add_scalar('eval/{k}', v, epoch)
+                tboard.add_scalar(f'eval/{k}', v, epoch)
 
             log.info(f'Epoch: {epoch} - Training - {train_log_message} - Evaluating - {dev_log_message}')
 
