@@ -77,16 +77,13 @@ class CustomClusterLoader(ClusterLoader):
         end = self.cluster_data.partptr[batch + 1].tolist()
         node_idx = torch.cat([torch.arange(s, e) for s, e in zip(start, end)])
 
-        # Attach the node indexes to the data
-        data['orig_node_idx'] = node_idx
-
         # Convert edge_index to sparse adjacency matrix
         row, col = data.edge_index
         edge_attr = np.ones(row.size(0))
         adj_matrix = coo_matrix((edge_attr, (row, col)), (data.num_nodes, data.num_nodes))
 
         # Normalize the adjacency matrix
-        adj_matrix = aug_normalized_adjacency(adj_matrix)
+        # adj_matrix = aug_normalized_adjacency(adj_matrix)
 
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix
