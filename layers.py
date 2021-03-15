@@ -2,6 +2,8 @@
 """
 Created on Sun Feb 28 06:48:49 2021
 """
+import numpy as np
+
 import math
 import torch
 import torch.nn as nn
@@ -29,6 +31,11 @@ class GeneralGraphLayer(MessagePassing):
                  node_dim = 0,
                  node_feature_bias = True,
                  node_embedding_bias = True,
+                 
+                 max_iters = 1,
+                 tol = 3e-6,
+                 log = None,
+                 
                  **kwargs):  
         super(GeneralGraphLayer, self).__init__(**kwargs)
         # Node feature weights. Named \phi in paper equation (1)
@@ -43,6 +50,10 @@ class GeneralGraphLayer(MessagePassing):
         self.node_dim = node_dim
         self.node_feature_bias = node_feature_bias
         self.node_embedding_bias = node_embedding_bias
+        
+        self.log = log
+        self.max_iters = max_iters
+        self.tol = tol
         
     def reset_parameters(self):
         """
@@ -71,10 +82,20 @@ class GeneralGraphLayer(MessagePassing):
     
         @return: Node representation at step T+1. 
         """
-        x = self.W(x)
-        x = self.propagate(edge_index, x=(x,x))
-        x = x + self.phi(u)
-        x = self.activation_fn(x)
+        
+        x_old = x
+        for it in range(self.max_iters):  
+            x = self.W(x)
+            x = self.propagate(edge_index, x=(x,x))
+            x = x + self.phi(u)
+            x = self.activation_fn(x)
+            
+            err = torch.norm(x_old - x, np.inf)
+            if err < self.tol:
+                break
+            if it == self.max_iters - 1:
+                self.log.info(f"Didn't converge: {err}")
+            x_old = x            
         return x
     
     def message_and_aggregate(edge_index, node_feature_src):
