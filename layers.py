@@ -10,10 +10,10 @@ import torch.nn.functional as F
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch.cuda.amp import custom_bwd, custom_fwd
+from torch_sparse import SparseTensor, matmul
 
 class GeneralGraphLayer(MessagePassing):
     """ A general graph layer.  
-    
     Performs:
     1) Propagate messages
     2) Aggregate messages
@@ -77,15 +77,5 @@ class GeneralGraphLayer(MessagePassing):
         x = self.activation_fn(x)
         return x
     
-    def message(self, x_j):
-        """
-        Get the message that neighbouring nodes pass to this node. 
-        
-        @param x_j: 
-            Hidden representation of neighbouring nodes.
-        """
-        return x_j
-
-    def aggregate(self, inputs, index, dim_size = None):
-        return torch_scatter.scatter(inputs, index, dim=self.node_dim, 
-                             dim_size=dim_size, reduce="sum")
+    def message_and_aggregate(edge_index, node_feature_src):
+        return matmul(edge_index, node_feature_src, reduce = "sum")
