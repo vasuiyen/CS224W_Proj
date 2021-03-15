@@ -364,8 +364,8 @@ def get_logger(log_dir, name):
 
 def load_pyg_dataset(dataset_name, root = 'dataset/'):
     from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
-    source, name = dataset_name.split('-')
-    assert source in ['ogbn', 'pyg']
+    source, name = dataset_name.split('-', maxsplit=1)
+    assert source in ['ogbn', 'pyg', 'custom']
     if source == 'ogbn':
         dataset = PygNodePropPredDataset(name = dataset_name, root = root)
         return dataset, dataset.get_idx_split(), Evaluator(dataset_name)
@@ -390,6 +390,16 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
             'test': perm[num_train + num_val:]
         }
         return dataset, split_idx, Evaluator('ogbn-arxiv')
+    elif source == "custom":
+        from dataset import registry
+        dataset = registry[name]()
+        split_idx = {
+            'train': dataset[0].idx_train,
+            'valid': dataset[0].idx_val,
+            'test': dataset[0].idx_test
+        }
+        return dataset, split_idx, Evaluator('ogbn-arxiv')
+    
     else:
         raise Exception("Dataset not recognized")
 
