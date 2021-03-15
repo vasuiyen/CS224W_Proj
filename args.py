@@ -128,7 +128,7 @@ def add_common_args(parser):
 
     parser.add_argument('--dataset',
                         type=str,
-                        choices=('ogbn-products', 'ogbn-arxiv', 'pyg-karate', 'pyg-cora'),
+                        choices=('ogbn-products', 'ogbn-arxiv', 'pyg-karate', 'pyg-cora', 'custom-amazon-all'),
                         default='ogbn-products')
 
     parser.add_argument('--save_dir',

@@ -67,7 +67,7 @@ class GCN(torch.nn.Module):
         #########################################
 
         # Probability of an element to be zeroed
-        self.dropout = args.dropout
+        self.dropout = args.drop_prob
 
     def reset_parameters(self):
         for conv in self.convs:

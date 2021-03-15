@@ -125,7 +125,7 @@ def main(args):
 
             # Visualize in TensorBoard
             for k, v in train_results.items():
-                tboard.add_scalar('train/{k}', v, epoch)
+                tboard.add_scalar(f'train/{k}', v, epoch)
 
             # Evaluate, display the stats and save the model
             dev_results = evaluate(model, dataset_loader, device, evaluator, args.loss_type)
@@ -138,7 +138,7 @@ def main(args):
 
             # Visualize in TensorBoard
             for k, v in dev_results.items():
-                tboard.add_scalar('eval/{k}', v, epoch)
+                tboard.add_scalar(f'eval/{k}', v, epoch)
 
             log.info(f'Epoch: {epoch} - Training - {train_log_message} - Evaluating - {dev_log_message}')
 
@@ -180,8 +180,14 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             optimizer.step()
 
             # Add batch data to the evaluation data
-            y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
+            labels = labels.cpu()
+            if len(labels.shape) == 1:
+                labels = torch.unsqueeze(labels, -1)
+            
+            y_true.extend(labels.tolist())
             y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+
+    print(np.asarray(y_true).shape, np.asarray(y_pred).shape)
 
     # Evaluate the training results
     results = evaluator.eval({
@@ -222,7 +228,11 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
             loss_meter.update(loss.item(), batch_size)
 
             # Add batch data to the evaluation data
-            y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
+            labels = labels.cpu()
+            if len(labels.shape) == 1:
+                labels = torch.unsqueeze(labels, -1)
+            
+            y_true.extend(labels.tolist())
             y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
