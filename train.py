@@ -54,10 +54,10 @@ def main(args):
 
     # Get data loader
     log.info('Building dataset...')
-    
-    # Refactored to allow KarateClub dataset
     dataset, split_idx, evaluator = load_pyg_dataset(args.dataset)
-    data = dataset[0]
+    data = dataset[0]    
+    # Attach the node idx to the data
+    data['orig_node_idx'] = torch.arange(data.x.shape[0])
 
     # Convert split indices to boolean masks and add them to `data`.
     for key, idx in split_idx.items():
@@ -186,8 +186,6 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             
             y_true.extend(labels.tolist())
             y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
-
-    print(np.asarray(y_true).shape, np.asarray(y_pred).shape)
 
     # Evaluate the training results
     results = evaluator.eval({

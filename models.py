@@ -6,6 +6,7 @@ import logging
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn import GCNConv
+
 from torch_geometric.utils.convert import to_scipy_sparse_matrix
 from scipy.sparse import coo_matrix
 
@@ -147,30 +148,31 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
 
         self.node_channels = input_dim
         self.hidden_channels = args.hidden_dim
-        self.tol = args.tol
         self.kappa = args.kappa
-        self.max_iters = args.max_forward_iterations
         self.drop_prob = args.drop_prob
-        num_nodes = kwargs.pop('num_nodes')
-
         self.spectral_radius_dict = {}
-
+        num_nodes = kwargs.pop('num_nodes')
+        
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
             in_channels = args.hidden_dim, 
             out_channels = args.hidden_dim, 
             node_channels = input_dim, 
+            max_iters = args.max_forward_iterations,
+            tol = args.tol,
+            log = log,
             **kwargs
         )
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         self.softmax = torch.nn.LogSoftmax(dim=-1)
-
-        self.log = log
-        self.log.debug(f"Initializing IGNN with node_channels={input_dim}, hidden_channels={args.hidden_dim}, prediction_channels={output_dim}")
         
+        self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
+        self.embedding.weight.requires_grad = False
+
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
+        self.embedding.reset_parameters()
 
     def project_recurrent_weight(self, spectral_radius):
         projection_norm_inf(self.graph_layer.W.weight, self.kappa / spectral_radius)
@@ -195,19 +197,12 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         
         self.project_recurrent_weight(spectral_radius)
 
-        # Use zeros to initialize embeddings
-        x = torch.zeros((num_nodes, self.hidden_channels)).to(node_feature.device)
+        x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        for it in range(self.max_iters):
-            x_new = self.graph_layer(x, node_feature, edge_index)
-            err = torch.norm(x_new - x, np.inf)
-            if torch.norm(x_new - x, np.inf) < self.tol:
-                break
-            x = x_new
-            if it == self.max_iters - 1:
-                self.log.info(f"Didn't converge: {err}")
-
+        x = self.graph_layer(x, node_feature, edge_index)
+        self.embedding.weight[node_index] = x.detach().clone()
+        
         x = F.dropout(x, self.drop_prob, training=self.training)
 
         out = self.prediction_head(x)

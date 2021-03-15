@@ -94,7 +94,7 @@ def get_train_args():
                         help="Control size of feasible set. Must be less than 1.0")
     parser.add_argument('--max_forward_iterations', 
                         type=int,
-                        default=100,
+                        default=300,
                         help="Max number of recurrent iterations per forward pass")
     parser.add_argument('--tol', 
                         type=float,

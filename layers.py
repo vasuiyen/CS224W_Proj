@@ -2,6 +2,8 @@
 """
 Created on Sun Feb 28 06:48:49 2021
 """
+import numpy as np
+
 import math
 import torch
 import torch.nn as nn
@@ -10,12 +12,15 @@ import torch.nn.functional as F
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch.cuda.amp import custom_bwd, custom_fwd
+<<<<<<< HEAD
 from utils import *
 from functions import *
+=======
+from torch_sparse import SparseTensor, matmul
+>>>>>>> main
 
 class GeneralGraphLayer(MessagePassing):
     """ A general graph layer.  
-    
     Performs:
     1) Propagate messages
     2) Aggregate messages
@@ -31,6 +36,11 @@ class GeneralGraphLayer(MessagePassing):
                  node_dim = 0,
                  node_feature_bias = True,
                  node_embedding_bias = True,
+                 
+                 max_iters = 1,
+                 tol = 3e-6,
+                 log = None,
+                 
                  **kwargs):  
         super(GeneralGraphLayer, self).__init__(**kwargs)
         # Node feature weights. Named \phi in paper equation (1)
@@ -45,6 +55,10 @@ class GeneralGraphLayer(MessagePassing):
         self.node_dim = node_dim
         self.node_feature_bias = node_feature_bias
         self.node_embedding_bias = node_embedding_bias
+        
+        self.log = log
+        self.max_iters = max_iters
+        self.tol = tol
         
     def reset_parameters(self):
         """
@@ -73,24 +87,25 @@ class GeneralGraphLayer(MessagePassing):
     
         @return: Node representation at step T+1. 
         """
-        x = self.W(x)
-        x = self.propagate(edge_index, x=(x,x))
-        x = x + self.phi(u)
-        x = self.activation_fn(x)
+        
+        x_old = x
+        for it in range(self.max_iters):  
+            x = self.W(x)
+            x = self.propagate(edge_index, x=(x,x))
+            x = x + self.phi(u)
+            x = self.activation_fn(x)
+            
+            err = torch.norm(x_old - x, np.inf)
+            if err < self.tol:
+                break
+            if it == self.max_iters - 1:
+                self.log.info(f"Didn't converge: {err}")
+            x_old = x            
         return x
     
-    def message(self, x_j):
-        """
-        Get the message that neighbouring nodes pass to this node. 
-        
-        @param x_j: 
-            Hidden representation of neighbouring nodes.
-        """
-        return x_j
 
-    def aggregate(self, inputs, index, dim_size = None):
-        return torch_scatter.scatter(inputs, index, dim=self.node_dim, 
-                             dim_size=dim_size, reduce="sum")
+def message_and_aggregate(edge_index, node_feature_src):
+    return matmul(edge_index, node_feature_src, reduce = "sum")
 
 
 class ImplicitGraph(nn.Module):
@@ -128,3 +143,4 @@ class ImplicitGraph(nn.Module):
         support_2 = torch.spmm(torch.transpose(U, 0, 1), self.Omega_2.T).T
         b_Omega = support_1 #+ support_2
         return ImplicitFunction.apply(self.W, X_0, A if A_orig is None else A_orig, b_Omega, phi, fw_mitr, bw_mitr)
+
