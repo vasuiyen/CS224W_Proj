@@ -21,6 +21,7 @@ from ogb.nodeproppred import Evaluator
 
 import tqdm
 
+import scipy.sparse as sp
 from sklearn.metrics import *
 
 from torch.utils.tensorboard import SummaryWriter
@@ -65,11 +66,19 @@ def main(args):
         mask[idx] = True
         data[f'{key}_mask'] = mask
 
+
     cluster_data = ClusterData(data, num_parts=args.num_partitions,
                                recursive=False, save_dir=dataset.processed_dir)
 
     dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
                            shuffle=args.data_shuffle, num_workers=args.num_workers)
+
+    # If the node features is a zero tensor with dimension one
+    # re-create it here as a (num_nodes, num_nodes) sparse identity matrix
+    if data.num_node_features == 1 and torch.equal(data['x'], torch.zeros(data.num_nodes, data.num_node_features)):
+        node_features = sp.identity(data.num_nodes)
+        node_features = sparse_mx_to_torch_sparse_tensor(node_features).float()
+        data['x'] = node_features
 
     # Get model
     log.info('Building model...')
@@ -186,7 +195,13 @@ def train(model, data_loader, optimizer, device, evaluator, args):
             
             y_true.extend(labels.tolist())
             if args.multi_label_class == True:
-                y_pred.extend(out.cpu().tolist())
+                pred = out.cpu().detach().numpy()
+                binary_pred = np.zeros(pred.shape).astype('int')
+                for i in range(pred.shape[0]):
+                    k = labels[i].cpu().detach().numpy().sum().astype('int')
+                    topk_idx = pred[i].argsort()[-k:]
+                    binary_pred[i][topk_idx] = 1
+                y_pred.extend(binary_pred.tolist())
             else:
                 y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
@@ -235,7 +250,13 @@ def evaluate(model, data_loader, device, evaluator, args):
             
             y_true.extend(labels.tolist())
             if args.multi_label_class == True:
-                y_pred.extend(out.cpu().tolist())
+                pred = out.cpu().detach().numpy()
+                binary_pred = np.zeros(pred.shape).astype('int')
+                for i in range(pred.shape[0]):
+                    k = labels[i].cpu().detach().numpy().sum().astype('int')
+                    topk_idx = pred[i].argsort()[-k:]
+                    binary_pred[i][topk_idx] = 1
+                y_pred.extend(binary_pred.tolist())
             else:
                 y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
