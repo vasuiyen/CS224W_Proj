@@ -151,7 +151,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.kappa = args.kappa
         self.drop_prob = args.drop_prob
         self.spectral_radius_dict = {}
-        num_nodes = kwargs.pop('num_nodes')
+        num_nodes = kwargs.pop('orig_num_nodes')
         
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(

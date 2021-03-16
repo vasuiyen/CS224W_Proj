@@ -21,6 +21,7 @@ from ogb.nodeproppred import Evaluator
 
 import tqdm
 
+import scipy.sparse as sp
 from sklearn.metrics import *
 
 from torch.utils.tensorboard import SummaryWriter
@@ -71,12 +72,21 @@ def main(args):
     dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
                            shuffle=args.data_shuffle, num_workers=args.num_workers)
 
+    num_nodes = data.num_nodes
+
+    # If the node features is a zero tensor with dimension one
+    # re-create it here as a (num_nodes, num_nodes) sparse identity matrix
+    if data.num_node_features == 1 and torch.equal(data['x'], torch.zeros(data.num_nodes, data.num_node_features)):
+        node_features = sp.identity(data.num_nodes/len(dataset_loader))
+        node_features = sparse_mx_to_torch_sparse_tensor(node_features).float()
+        data['x'] = node_features
+
     # Get model
     log.info('Building model...')
 
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(data.num_node_features, dataset.num_classes, args, log, num_nodes=data.num_nodes)
+    model = model_class(data.num_node_features, dataset.num_classes, args, log, orig_num_nodes=num_nodes)
     
     model = DataParallelWrapper(model)
     if args.load_path:
@@ -117,7 +127,7 @@ def main(args):
         for epoch in range(args.num_epochs):
 
             # Train and display the stats
-            train_results = train(model, dataset_loader, optimizer, device, evaluator, args.loss_type)
+            train_results = train(model, dataset_loader, optimizer, device, evaluator, args)
             
             # Log the metrics
             train_log_message = ''.join('{} - {}; '.format(k, v) for k, v in train_results.items())
@@ -128,7 +138,7 @@ def main(args):
                 tboard.add_scalar(f'train/{k}', v, epoch)
 
             # Evaluate, display the stats and save the model
-            dev_results = evaluate(model, dataset_loader, device, evaluator, args.loss_type)
+            dev_results = evaluate(model, dataset_loader, device, evaluator, args)
 
             # Save the model
             saver.save(epoch, model, dev_results[args.metric_name], device)
@@ -146,7 +156,7 @@ def main(args):
             progress_bar.set_postfix(eval_loss=dev_results['loss'])
 
 
-def train(model, data_loader, optimizer, device, evaluator, loss_type):
+def train(model, data_loader, optimizer, device, evaluator, args):
 
     model.train()
 
@@ -172,7 +182,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             labels = batch.y.squeeze()[batch.train_mask]
             
             # Calculate the loss and do the average
-            loss = isometricLoss(out, labels, loss_type)
+            loss = isometricLoss(out, labels, args.loss_type)
             loss_meter.update(loss.item(), batch_size)
             
             # Backward
@@ -185,7 +195,16 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+            if args.multi_label_class == True:
+                pred = out.cpu().detach().numpy()
+                binary_pred = np.zeros(pred.shape).astype('int')
+                for i in range(pred.shape[0]):
+                    k = labels[i].cpu().detach().numpy().sum().astype('int')
+                    topk_idx = pred[i].argsort()[-k:]
+                    binary_pred[i][topk_idx] = 1
+                y_pred.extend(binary_pred.tolist())
+            else:
+                y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
     results = evaluator.eval({
@@ -198,7 +217,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
     return results
 
 
-def evaluate(model, data_loader, device, evaluator, loss_type):
+def evaluate(model, data_loader, device, evaluator, args):
 
     model.eval()
 
@@ -222,7 +241,7 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
             labels = batch.y.squeeze()[batch.valid_mask]
 
             # Calculate the loss and do the average
-            loss = isometricLoss(out, labels, loss_type)
+            loss = isometricLoss(out, labels, args.loss_type)
             loss_meter.update(loss.item(), batch_size)
 
             # Add batch data to the evaluation data
@@ -231,7 +250,16 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+            if args.multi_label_class == True:
+                pred = out.cpu().detach().numpy()
+                binary_pred = np.zeros(pred.shape).astype('int')
+                for i in range(pred.shape[0]):
+                    k = labels[i].cpu().detach().numpy().sum().astype('int')
+                    topk_idx = pred[i].argsort()[-k:]
+                    binary_pred[i][topk_idx] = 1
+                y_pred.extend(binary_pred.tolist())
+            else:
+                y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
     results = evaluator.eval({

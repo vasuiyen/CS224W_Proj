@@ -8,6 +8,7 @@ import scipy.sparse.linalg as linalg
 import networkx as nx
 import scipy.sparse as sp
 from scipy.sparse import coo_matrix
+from sklearn import metrics
 
 import logging
 import os
@@ -88,9 +89,29 @@ class CustomClusterLoader(ClusterLoader):
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix
 
+        # If the node features is a zero tensor with dimension one
+        # re-create it here as a (num_nodes, num_nodes) sparse identity matrix
+        if data.num_node_features == 1 and torch.equal(data['x'], torch.zeros(data.num_nodes, data.num_node_features)):
+            node_features = sp.identity(data.num_nodes)
+            node_features = sparse_mx_to_torch_sparse_tensor(node_features).float()
+            data['x'] = node_features
+
         # Return the enhanced data
         return data
-        
+
+class CustomEvaluator():
+    def __init__(self):
+        super(CustomEvaluator, self).__init__()
+
+    def eval(self, data):
+        y_true = data['y_true']
+        y_pred = data['y_pred']
+
+        results = {}
+
+        results['acc'] = metrics.accuracy_score(y_true, y_pred)
+
+        return results      
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -395,7 +416,7 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
             'valid': dataset[0].idx_val,
             'test': dataset[0].idx_test
         }
-        return dataset, split_idx, Evaluator('ogbn-arxiv')
+        return dataset, split_idx, CustomEvaluator()
     
     else:
         raise Exception("Dataset not recognized")
@@ -493,3 +514,15 @@ def aug_normalized_adjacency(adj, need_orig=False):
    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
    return d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt).tocoo()
+
+def sparse_mx_to_torch_sparse_tensor(sparse_mx, device=None):
+    """Convert a scipy sparse matrix to a torch sparse tensor."""
+    sparse_mx = sparse_mx.tocoo().astype(np.float32)
+    indices = torch.from_numpy(
+        np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
+    values = torch.from_numpy(sparse_mx.data)
+    shape = torch.Size(sparse_mx.shape)
+    tensor = torch.sparse.FloatTensor(indices, values, shape)
+    if device is not None:
+        tensor = tensor.to(device)
+    return tensor
