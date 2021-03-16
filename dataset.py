@@ -101,7 +101,7 @@ class AmazonAll(CustomTextDataset):
             # It doesn't work in this framework, so I put a placeholder for now
             edge_index = edge_index, 
             edge_attr = edge_attr,
-            y = labels[:,6],
+            y = labels,
             # Note: In this dataset there are 58 independent binary labels
             # our framework does not support that so I chose one of the binary classes 
             # and converted it to 

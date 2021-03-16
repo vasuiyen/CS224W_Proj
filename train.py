@@ -117,7 +117,7 @@ def main(args):
         for epoch in range(args.num_epochs):
 
             # Train and display the stats
-            train_results = train(model, dataset_loader, optimizer, device, evaluator, args.loss_type)
+            train_results = train(model, dataset_loader, optimizer, device, evaluator, args)
             
             # Log the metrics
             train_log_message = ''.join('{} - {}; '.format(k, v) for k, v in train_results.items())
@@ -128,7 +128,7 @@ def main(args):
                 tboard.add_scalar(f'train/{k}', v, epoch)
 
             # Evaluate, display the stats and save the model
-            dev_results = evaluate(model, dataset_loader, device, evaluator, args.loss_type)
+            dev_results = evaluate(model, dataset_loader, device, evaluator, args)
 
             # Save the model
             saver.save(epoch, model, dev_results[args.metric_name], device)
@@ -146,7 +146,7 @@ def main(args):
             progress_bar.set_postfix(eval_loss=dev_results['loss'])
 
 
-def train(model, data_loader, optimizer, device, evaluator, loss_type):
+def train(model, data_loader, optimizer, device, evaluator, args):
 
     model.train()
 
@@ -172,7 +172,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
             labels = batch.y.squeeze()[batch.train_mask]
             
             # Calculate the loss and do the average
-            loss = isometricLoss(out, labels, loss_type)
+            loss = isometricLoss(out, labels, args.loss_type)
             loss_meter.update(loss.item(), batch_size)
             
             # Backward
@@ -185,7 +185,10 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+            if args.multi_label_class == True:
+                y_pred.extend(out.cpu().tolist())
+            else:
+                y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
     results = evaluator.eval({
@@ -198,7 +201,7 @@ def train(model, data_loader, optimizer, device, evaluator, loss_type):
     return results
 
 
-def evaluate(model, data_loader, device, evaluator, loss_type):
+def evaluate(model, data_loader, device, evaluator, args):
 
     model.eval()
 
@@ -222,7 +225,7 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
             labels = batch.y.squeeze()[batch.valid_mask]
 
             # Calculate the loss and do the average
-            loss = isometricLoss(out, labels, loss_type)
+            loss = isometricLoss(out, labels, args.loss_type)
             loss_meter.update(loss.item(), batch_size)
 
             # Add batch data to the evaluation data
@@ -231,7 +234,10 @@ def evaluate(model, data_loader, device, evaluator, loss_type):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+            if args.multi_label_class == True:
+                y_pred.extend(out.cpu().tolist())
+            else:
+                y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
     results = evaluator.eval({

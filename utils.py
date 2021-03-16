@@ -8,6 +8,7 @@ import scipy.sparse.linalg as linalg
 import networkx as nx
 import scipy.sparse as sp
 from scipy.sparse import coo_matrix
+from sklearn import metrics
 
 import logging
 import os
@@ -91,6 +92,19 @@ class CustomClusterLoader(ClusterLoader):
         # Return the enhanced data
         return data
         
+class CustomEvaluator():
+    def __init__(self):
+        super(CustomEvaluator, self).__init__()
+
+    def eval(self, data):
+        y_true = data['y_true']
+        y_pred = data['y_pred']
+
+        results = {}
+
+        results['acc'] = metrics.accuracy_score(y_true, y_pred)
+
+        return results
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -395,7 +409,7 @@ def load_pyg_dataset(dataset_name, root = 'dataset/'):
             'valid': dataset[0].idx_val,
             'test': dataset[0].idx_test
         }
-        return dataset, split_idx, Evaluator('ogbn-arxiv')
+        return dataset, split_idx, CustomEvaluator()
     
     else:
         raise Exception("Dataset not recognized")

@@ -12,12 +12,12 @@ import torch.nn.functional as F
 import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch.cuda.amp import custom_bwd, custom_fwd
-<<<<<<< HEAD
+
 from utils import *
 from functions import *
-=======
+
 from torch_sparse import SparseTensor, matmul
->>>>>>> main
+
 
 class GeneralGraphLayer(MessagePassing):
     """ A general graph layer.  
