@@ -86,9 +86,7 @@ class GeneralGraphLayer(MessagePassing):
         x_old = x
         for it in range(self.max_iters):  
             x = self.W(x)
-            x = self.propagate(edge_index, x=(x,x))
-            x = x + self.phi(u)
-            x = self.activation_fn(x)
+            x = self.propagate(edge_index, x=x, u=u)
             
             err = torch.norm(x_old - x, np.inf)
             if err < self.tol:
@@ -98,5 +96,10 @@ class GeneralGraphLayer(MessagePassing):
             x_old = x            
         return x
     
-    def message_and_aggregate(edge_index, node_feature_src):
-        return matmul(edge_index, node_feature_src, reduce = "sum")
+    def message_and_aggregate(self, edge_index, x):
+        return matmul(edge_index, x, reduce = "sum")
+    
+    def update(self, aggr_out, x, u):
+        u = self.phi(u)
+        x = aggr_out + u
+        return self.activation_fn(x)

@@ -102,10 +102,6 @@ class GCN(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         
         out = self.convs[-1](x, adj_t)
-
-        out = self.softmax(out)
-        
-        return out
         #########################################
 
         return out
@@ -184,6 +180,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         @return y: Model outputs after convergence.
         """
         node_index, node_feature, edge_index, adj_matrix = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
+        adj_t = data.adj_t
         num_nodes = node_feature.shape[0]
 
         if hasattr(data, 'batch_index'):
@@ -200,13 +197,12 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        x = self.graph_layer(x, node_feature, edge_index)
+        x = self.graph_layer(x, node_feature, adj_t)
         self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
 
-        out = self.prediction_head(x)
-        return self.softmax(out)
+        return self.prediction_head(x)
 
 class DataParallelWrapper(torch.nn.DataParallel):  
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     

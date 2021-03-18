@@ -25,6 +25,8 @@ import sys
 
 import models
 
+from torch_sparse import SparseTensor
+
 def estimate_spectral_radius(graph):
     """    
     @graph: A networkx.Graph, undirected
@@ -79,15 +81,16 @@ class CustomClusterLoader(ClusterLoader):
 
         # Convert edge_index to sparse adjacency matrix
         row, col = data.edge_index
-        edge_attr = np.ones(row.size(0))
+        edge_attr = np.ones(row.size(0), dtype=np.float32)
         adj_matrix = coo_matrix((edge_attr, (row, col)), (data.num_nodes, data.num_nodes))
-
+        adj_matrix_tensor = SparseTensor.from_scipy(adj_matrix)
+        
         # Normalize the adjacency matrix
         # adj_matrix = aug_normalized_adjacency(adj_matrix)
 
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix
-
+        data['adj_t'] = adj_matrix_tensor
         # Return the enhanced data
         return data
         
