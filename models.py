@@ -147,7 +147,10 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.kappa = args.kappa
         self.drop_prob = args.drop_prob
         self.spectral_radius_dict = {}
-        num_nodes = kwargs.pop('num_nodes')
+        num_nodes = kwargs.pop('orig_num_nodes')
+        
+        self.log = log
+        self.log.debug(f"Model node channels = {self.node_channels}")
         
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
@@ -181,7 +184,6 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         """
         node_index, node_feature, edge_index, adj_matrix = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
         adj_t = data.adj_t
-        num_nodes = node_feature.shape[0]
 
         if hasattr(data, 'batch_index'):
             if data.batch_index not in self.spectral_radius_dict:
@@ -197,6 +199,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
+        self.log.debug(f"Model u feature shape = {node_feature.shape}")
         x = self.graph_layer(x, node_feature, adj_t)
         self.embedding.weight[node_index] = x.detach().clone()
         

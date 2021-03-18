@@ -183,5 +183,10 @@ def add_train_test_args(parser):
                         default=3,
                         help='Number of layers.')
 
+    parser.add_argument('--multi_label_class',
+                        type=bool,
+                        default=False,
+                        help='Multi label classification?')
+
 
                         
