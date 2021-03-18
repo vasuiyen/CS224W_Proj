@@ -79,14 +79,14 @@ def main(args):
     if data.num_node_features == 1 and torch.equal(data['x'], torch.zeros(data.num_nodes, data.num_node_features)):
         node_features = sp.identity(data.num_nodes/len(dataset_loader))
         node_features = sparse_mx_to_torch_sparse_tensor(node_features).float()
-        data['x'] = node_features
-
+        data.x = node_features 
+        
     # Get model
     log.info('Building model...')
 
     # Create the model, optimizer and checkpoint
     model_class = str_to_attribute(sys.modules['models'], args.name)
-    model = model_class(data.num_node_features, dataset.num_classes, args, log, orig_num_nodes=num_nodes)
+    model = model_class(data.x.shape[-1], dataset.num_classes, args, log, orig_num_nodes=num_nodes)
     
     model = DataParallelWrapper(model)
     if args.load_path:

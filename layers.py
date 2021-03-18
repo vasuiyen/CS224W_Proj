@@ -55,6 +55,8 @@ class GeneralGraphLayer(MessagePassing):
         self.max_iters = max_iters
         self.tol = tol
         
+        self.log.debug(f"Layer node channels = {node_channels}")
+        
     def reset_parameters(self):
         """
         Use same initialization as original implementation.
@@ -86,17 +88,19 @@ class GeneralGraphLayer(MessagePassing):
         x_old = x
         for it in range(self.max_iters):  
             x = self.W(x)
-            x = self.propagate(edge_index, x=(x,x))
-            x = x + self.phi(u)
-            x = self.activation_fn(x)
+            x = self.propagate(edge_index, x=x, u=u)
             
             err = torch.norm(x_old - x, np.inf)
             if err < self.tol:
                 break
-            if it == self.max_iters - 1:
-                self.log.info(f"Didn't converge: {err}")
+            #if it == self.max_iters - 1:
+                #self.log.info(f"Didn't converge: {err}")
             x_old = x            
         return x
     
-    def message_and_aggregate(edge_index, node_feature_src):
-        return matmul(edge_index, node_feature_src, reduce = "sum")
+    def message_and_aggregate(self, edge_index, x):
+        return matmul(edge_index, x, reduce = "sum")
+    
+    def update(self, aggr_out, u):
+        x = aggr_out + self.phi(u)
+        return self.activation_fn(x)
