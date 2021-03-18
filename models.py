@@ -102,10 +102,6 @@ class GCN(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         
         out = self.convs[-1](x, adj_t)
-
-        out = self.softmax(out)
-        
-        return out
         #########################################
 
         return out
@@ -151,7 +147,10 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.kappa = args.kappa
         self.drop_prob = args.drop_prob
         self.spectral_radius_dict = {}
-        num_nodes = kwargs.pop('num_nodes')
+        num_nodes = kwargs.pop('orig_num_nodes')
+        
+        self.log = log
+        self.log.debug(f"Model node channels = {self.node_channels}")
         
         # Initialize the neural net
         self.graph_layer = GeneralGraphLayer(
@@ -164,7 +163,6 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             **kwargs
         )
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
-        self.softmax = torch.nn.LogSoftmax(dim=-1)
         
         self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
         self.embedding.weight.requires_grad = False
@@ -184,7 +182,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         @return y: Model outputs after convergence.
         """
         node_index, node_feature, edge_index, adj_matrix = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
-        num_nodes = node_feature.shape[0]
+        adj_t = data.adj_t
 
         if hasattr(data, 'batch_index'):
             if data.batch_index not in self.spectral_radius_dict:
@@ -200,13 +198,13 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        x = self.graph_layer(x, node_feature, edge_index)
+        self.log.trace(f"Model u feature shape = {node_feature.shape}")
+        x = self.graph_layer(x, node_feature, adj_t)
         self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
 
-        out = self.prediction_head(x)
-        return self.softmax(out)
+        return self.prediction_head(x)
 
 
 class IGNN(nn.Module):

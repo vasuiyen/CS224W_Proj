@@ -14,5 +14,6 @@ def isometricLoss(output, target, type='L1'):
     if type == 'CrossEntropy':
         loss = nn.CrossEntropyLoss()
     if type == 'NLL':
+        output = torch.log_softmax(output)
         loss = nn.NLLLoss()
     return loss(output, target)

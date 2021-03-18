@@ -26,6 +26,8 @@ import sys
 
 import models
 
+from torch_sparse import SparseTensor
+
 def estimate_spectral_radius(graph):
     """    
     @graph: A networkx.Graph, undirected
@@ -62,6 +64,9 @@ def compute_spectral_radius(A, l = None):
 class CustomClusterLoader(ClusterLoader):
 
     def __init__(self, cluster_data, **kwargs):
+
+        self.normalize_adj_matrix = kwargs.pop('normalize_adj_matrix')
+
         super(CustomClusterLoader,
               self).__init__(cluster_data, **kwargs)
 
@@ -80,14 +85,26 @@ class CustomClusterLoader(ClusterLoader):
 
         # Convert edge_index to sparse adjacency matrix
         row, col = data.edge_index
-        edge_attr = np.ones(row.size(0))
+        edge_attr = np.ones(row.size(0), dtype=np.float32)
         adj_matrix = coo_matrix((edge_attr, (row, col)), (data.num_nodes, data.num_nodes))
-
+        adj_matrix_tensor = SparseTensor.from_scipy(adj_matrix)
+        # adj_matrix_tensor = SparseTensor(row=row, col = col, value = torch.ones(row.size(0), dtype=torch.float32), sparse_sizes = (data.num_nodes, data.num_nodes))
+        
+        
         # Normalize the adjacency matrix
-        # adj_matrix = aug_normalized_adjacency(adj_matrix)
+        if self.normalize_adj_matrix == True:
+            adj_matrix = aug_normalized_adjacency(adj_matrix)
 
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix
+        data['adj_t'] = adj_matrix_tensor
+
+        # If the node features is a zero tensor with dimension one
+        # re-create it here as a (num_nodes, num_nodes) sparse identity matrix
+        if data.num_node_features == 1 and torch.equal(data['x'], torch.zeros(data.num_nodes, data.num_node_features)):
+            node_features = sp.identity(data.num_nodes)
+            node_features = sparse_mx_to_torch_sparse_tensor(node_features).float()
+            data['x'] = node_features
 
         # If the node features is a zero tensor with dimension one
         # re-create it here as a (num_nodes, num_nodes) sparse identity matrix
@@ -98,7 +115,6 @@ class CustomClusterLoader(ClusterLoader):
 
         # Return the enhanced data
         return data
-        
 class CustomEvaluator():
     def __init__(self):
         super(CustomEvaluator, self).__init__()
@@ -112,6 +128,7 @@ class CustomEvaluator():
         results['acc'] = metrics.accuracy_score(y_true, y_pred)
 
         return results
+
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -515,7 +532,6 @@ def aug_normalized_adjacency(adj, need_orig=False):
    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
    return d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt).tocoo()
 
-
 def sparse_mx_to_torch_sparse_tensor(sparse_mx, device=None):
     """Convert a scipy sparse matrix to a torch sparse tensor."""
     sparse_mx = sparse_mx.tocoo().astype(np.float32)
@@ -526,4 +542,5 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx, device=None):
     tensor = torch.sparse.FloatTensor(indices, values, shape)
     if device is not None:
         tensor = tensor.to(device)
+        
     return tensor

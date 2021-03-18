@@ -188,5 +188,11 @@ def add_train_test_args(parser):
                         default=False,
                         help='Multi label classification?')
 
+    parser.add_argument('--normalize_adj_matrix',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False,
+                        help='Whether to normalize the adjacency matrix.')    
+
+
 
                         
