@@ -167,6 +167,8 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
         self.embedding.weight.requires_grad = False
 
+        self.ig1 = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa)
+
     def reset_parameters(self):
         self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
@@ -183,6 +185,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         """
         node_index, node_feature, edge_index, adj_matrix = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
         adj_t = data.adj_t
+        num_nodes = node_feature.shape[0]
 
         if hasattr(data, 'batch_index'):
             if data.batch_index not in self.spectral_radius_dict:
@@ -195,12 +198,21 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         
         self.project_recurrent_weight(spectral_radius)
 
-        x = self.embedding(node_index)
+        # x = self.embedding(node_index)
+
+        x_0 = torch.zeros(self.hidden_channels, num_nodes).to(node_feature.device)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        self.log.trace(f"Model u feature shape = {node_feature.shape}")
-        x = self.graph_layer(x, node_feature, adj_t)
-        self.embedding.weight[node_index] = x.detach().clone()
+        self.log.debug(f"Model u feature shape = {node_feature.shape}")
+        # x = self.graph_layer(x, node_feature, adj_t)
+
+        adj_matrix = torch.sparse.FloatTensor(
+            torch.LongTensor(np.vstack((adj_matrix.row, adj_matrix.col))),
+            torch.FloatTensor(adj_matrix.data),
+            adj_matrix.shape).to(node_feature.device)
+
+        x = self.ig1(x_0, adj_matrix, node_feature, F.relu, spectral_radius, A_orig=None).T
+        # self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
 
