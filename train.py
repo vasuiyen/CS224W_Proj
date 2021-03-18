@@ -70,7 +70,8 @@ def main(args):
                                recursive=False, save_dir=dataset.processed_dir)
 
     dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
-                           shuffle=args.data_shuffle, num_workers=args.num_workers)
+                           shuffle=args.data_shuffle, num_workers=args.num_workers,
+                           normalize_adj_matrix=args.normalize_adj_matrix)
 
     num_nodes = data.num_nodes
 

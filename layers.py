@@ -93,8 +93,8 @@ class GeneralGraphLayer(MessagePassing):
             err = torch.norm(x_old - x, np.inf)
             if err < self.tol:
                 break
-            #if it == self.max_iters - 1:
-                #self.log.info(f"Didn't converge: {err}")
+            if it == self.max_iters - 1:
+                self.log.debug(f"Didn't converge: {err}")
             x_old = x            
         return x
     

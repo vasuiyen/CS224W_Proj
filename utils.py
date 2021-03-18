@@ -64,6 +64,9 @@ def compute_spectral_radius(A, l = None):
 class CustomClusterLoader(ClusterLoader):
 
     def __init__(self, cluster_data, **kwargs):
+
+        self.normalize_adj_matrix = kwargs.pop('normalize_adj_matrix')
+
         super(CustomClusterLoader,
               self).__init__(cluster_data, **kwargs)
 
@@ -89,7 +92,8 @@ class CustomClusterLoader(ClusterLoader):
         
         
         # Normalize the adjacency matrix
-        # adj_matrix = aug_normalized_adjacency(adj_matrix)
+        if self.normalize_adj_matrix == True:
+            adj_matrix = aug_normalized_adjacency(adj_matrix)
 
         # Attach the adjacency matrix to the data
         data['adj_matrix'] = adj_matrix

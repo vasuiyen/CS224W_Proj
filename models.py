@@ -163,7 +163,6 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             **kwargs
         )
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
-        self.softmax = torch.nn.LogSoftmax(dim=-1)
         
         self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
         self.embedding.weight.requires_grad = False
@@ -199,7 +198,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
-        self.log.debug(f"Model u feature shape = {node_feature.shape}")
+        self.log.trace(f"Model u feature shape = {node_feature.shape}")
         x = self.graph_layer(x, node_feature, adj_t)
         self.embedding.weight[node_index] = x.detach().clone()
         
