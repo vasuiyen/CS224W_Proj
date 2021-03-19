@@ -24,7 +24,7 @@ class ImplicitGraph(nn.Module):
     A Implicit Graph Neural Network Layer (IGNN)
     """
 
-    def __init__(self, in_features, out_features, num_node, kappa=0.99):
+    def __init__(self, in_features, out_features, num_node, kappa=0.99, init_type="uniform"):
         super(ImplicitGraph, self).__init__()
         self.p = in_features
         self.m = out_features
@@ -35,14 +35,29 @@ class ImplicitGraph(nn.Module):
         self.Omega_1 = nn.Parameter(torch.FloatTensor(self.m, self.p))
         self.Omega_2 = nn.Parameter(torch.FloatTensor(self.m, self.p))
         self.bias = nn.Parameter(torch.FloatTensor(self.m, 1))
-        self.init()
+        self.init(init_type)
 
-    def init(self):
-        stdv = 1. / math.sqrt(self.W.size(1))
-        self.W.data.uniform_(-stdv, stdv)
-        self.Omega_1.data.uniform_(-stdv, stdv)
-        self.Omega_2.data.uniform_(-stdv, stdv)
-        self.bias.data.uniform_(-stdv, stdv)
+    def init(self, init_type):
+
+        if init_type == 'uniform':
+            stdv = 1. / math.sqrt(self.W.size(1))
+            self.W.data.uniform_(-stdv, stdv)
+            self.Omega_1.data.uniform_(-stdv, stdv)
+            self.Omega_2.data.uniform_(-stdv, stdv)
+            self.bias.data.uniform_(-stdv, stdv)
+
+        elif init_type == 'kaiming_uniform':
+            torch.nn.init.kaiming_uniform_(self.W.data)
+            torch.nn.init.kaiming_uniform_(self.Omega_1.data)
+            torch.nn.init.kaiming_uniform_(self.Omega_2.data)
+            torch.nn.init.kaiming_uniform_(self.bias.data)
+
+        elif init_type == 'kaiming_normal':
+            torch.nn.init.kaiming_normal_(self.W.data)
+            torch.nn.init.kaiming_normal_(self.Omega_1.data)
+            torch.nn.init.kaiming_normal_(self.Omega_2.data)
+            torch.nn.init.kaiming_normal_(self.bias.data)
+
 
     def forward(self, X_0, A, U, phi, A_rho=1.0, fw_mitr=300, bw_mitr=300):
         

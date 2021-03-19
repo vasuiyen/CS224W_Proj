@@ -63,7 +63,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.log.debug(f"Model node channels = {self.node_channels}")
         
         # Initialize the neural net
-        self.graph_layer = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa)
+        self.graph_layer = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa, args.init_type)
 
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         

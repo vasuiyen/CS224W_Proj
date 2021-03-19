@@ -198,6 +198,12 @@ def add_train_test_args(parser):
                         choices=('zero', 'random', 'persistent'),
                         default='zero',
                         help='What kind of embeddings to use.')
+
+    parser.add_argument('--init_type',
+                        type=str,
+                        choices=('uniform', 'kaiming_uniform', 'kaiming_normal'),
+                        default='zero',
+                        help='What kind of initialization to use for the recurrent layer weights.')
     
 
 
