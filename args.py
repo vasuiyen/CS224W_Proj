@@ -205,7 +205,16 @@ def add_train_test_args(parser):
                         default='zero',
                         help='What kind of initialization to use for the recurrent layer weights.')
     
-
+    parser.add_argument('--reg_coefficient',
+                        type=float, 
+                        default = 0,
+                        help = "If nonzero, add a regularization loss on the weights based on the spectral norm of the adjacency matrix")
+    
+    parser.add_argument('--reg_loss_type',
+                        type=str, 
+                        choices = ('hard', 'soft'),
+                        default = 'hard', 
+                        help = "See losses.py for explanation")
 
 
                         

@@ -122,7 +122,7 @@ class CustomEvaluator():
     def eval(self, data):
         y_true = data['y_true']
         y_pred = data['y_pred']
-
+        print(y_true, y_pred)
         results = {}
 
         results['acc'] = metrics.accuracy_score(y_true, y_pred)

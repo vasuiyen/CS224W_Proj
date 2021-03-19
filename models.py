@@ -9,6 +9,7 @@ from torch_geometric.nn import GCNConv
 
 from torch_geometric.utils.convert import to_scipy_sparse_matrix
 from scipy.sparse import coo_matrix
+from losses import soft_spectral_loss, hard_spectral_loss
 
 import numpy as np
 
@@ -57,6 +58,9 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.kappa = args.kappa
         self.drop_prob = args.drop_prob
         self.spectral_radius_dict = {}
+        self.reg_coefficient = args.reg_coefficient
+        self.reg_loss_type = args.reg_loss_type
+        
         num_nodes = kwargs.pop('orig_num_nodes')
         
         self.log = log
@@ -95,10 +99,9 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
                 self.spectral_radius_dict[data.batch_index] = compute_spectral_radius(adj_matrix)
 
             spectral_radius = self.spectral_radius_dict.get(data.batch_index)
-                
         else:
             spectral_radius = compute_spectral_radius(adj_matrix)
-
+            
         adj_matrix = torch.sparse.FloatTensor(
             torch.LongTensor(np.vstack((adj_matrix.row, adj_matrix.col))),
             torch.FloatTensor(adj_matrix.data),
@@ -119,8 +122,20 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
+        prediction_logits = self.prediction_head(x)
+        
+        reg_loss = self.reg_coefficient * self.reg_loss(self.graph_layer.W, spectral_radius)
 
-        return self.prediction_head(x)
+        return prediction_logits, reg_loss
+    
+    def reg_loss(self, W, spectral_radius):
+        """ Regularization losses """
+        if self.reg_loss_type == "hard":
+            return hard_spectral_loss(W, spectral_radius)
+        elif self.reg_loss_type == "soft":
+            return soft_spectral_loss(W, spectral_radius)
+        else:
+            raise ValueError("Regularization loss type not recognized")
 
 class DataParallelWrapper(torch.nn.DataParallel):  
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
