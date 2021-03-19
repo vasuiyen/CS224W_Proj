@@ -191,7 +191,14 @@ def add_train_test_args(parser):
     parser.add_argument('--normalize_adj_matrix',
                         type=lambda s: s.lower().startswith('t'),
                         default=False,
-                        help='Whether to normalize the adjacency matrix.')    
+                        help='Whether to normalize the adjacency matrix.')
+
+    parser.add_argument('--embed_type',
+                        type=str,
+                        choices=('zero', 'random', 'persistent'),
+                        default='zero',
+                        help='What kind of embeddings to use.')
+    
 
 
 
