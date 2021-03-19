@@ -372,12 +372,12 @@ def get_logger(log_dir, name):
 
     # Create logger
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     # Log everything (i.e., DEBUG level and above) to a file
     log_path = os.path.join(log_dir, 'log.txt')
     file_handler = logging.FileHandler(log_path)
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.INFO)
 
     # Log everything except DEBUG level (i.e., INFO level and above) to console
     console_handler = StreamHandlerWithTQDM()
