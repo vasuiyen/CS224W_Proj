@@ -62,9 +62,11 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.log = log
         self.log.debug(f"Model node channels = {self.node_channels}")
         
-        # Initialize the neural net
-        self.graph_layer = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa, args.init_type)
-
+        # Initialize the implicit graph layers
+        self.implicit_graph_layers = nn.ModuleList([
+            ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa, args.init_type) for l in range(args.num_layers)
+        ])
+        
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         
         if self.args.embed_type != 'zero':
@@ -105,15 +107,16 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
             adj_matrix.shape).to(node_feature.device)
 
         if self.args.embed_type == 'zero':
-            x_0 = torch.zeros(self.hidden_channels, num_nodes).to(node_feature.device)
+            x = torch.zeros(num_nodes, self.hidden_channels).to(node_feature.device)
         else:
-            x_0 = torch.transpose(self.embedding(node_index), 0, 1)
+            x = self.embedding(node_index)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
         self.log.debug(f"Model u feature shape = {node_feature.shape}")
 
-        x = self.graph_layer(x_0, adj_matrix, torch.transpose(node_feature, 0, 1), F.relu, spectral_radius, 
-        self.args.max_forward_iterations, self.args.max_forward_iterations).T
+        for implicit_graph in self.implicit_graph_layers:
+            x = implicit_graph(torch.transpose(x, 0, 1), adj_matrix, torch.transpose(node_feature, 0, 1), F.relu, spectral_radius, 
+            self.args.max_forward_iterations, self.args.max_forward_iterations).T
 
         if self.args.embed_type == 'persistent' and self.training == True:
             self.embedding.weight[node_index] = x.detach().clone()

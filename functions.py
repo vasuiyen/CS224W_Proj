@@ -16,16 +16,16 @@ class ImplicitFunction(Function):
     @staticmethod
     def backward(ctx, *grad_outputs):
 
-        #import pydevd
-        #pydevd.settrace(suspend=False, trace_only_current_thread=True)
+        # import pydevd
+        # pydevd.settrace(suspend=False, trace_only_current_thread=True)
 
         W, X, A, B, D, X_0, bw_mitr = ctx.saved_tensors
         bw_mitr = bw_mitr.cpu().numpy()
         grad_x = grad_outputs[0]
 
         dphi = lambda X: torch.mul(X, D)
-        grad_z, err, status, _ = ImplicitFunction.inn_pred(W.T, X_0, A, grad_x, dphi, mitr=bw_mitr, trasposed_A=True)
-        #grad_z.clamp_(-1,1)
+        grad_z, err, status, _ = ImplicitFunction.inn_pred(W.T, X_0, A, grad_x, dphi, mitr=bw_mitr, transposed_A=True)
+        grad_z.clamp_(-1,1)
 
         grad_W = grad_z @ torch.spmm(A, X.T)
         grad_B = grad_z
@@ -34,10 +34,9 @@ class ImplicitFunction(Function):
         return grad_W, None, torch.zeros_like(A), grad_B, None, None, None
 
     @staticmethod
-    def inn_pred(W, X, A, B, phi, mitr=300, tol=3e-6, trasposed_A=False, compute_dphi=False):
-        # TODO: randomized speed up
-        At = A if trasposed_A else torch.transpose(A, 0, 1)
-        #X = B if X is None else X
+    def inn_pred(W, X, A, B, phi, mitr=300, tol=3e-6, transposed_A=False, compute_dphi=False):
+        
+        At = A if transposed_A else torch.transpose(A, 0, 1)
 
         err = 0
         status = 'max itrs reached'

@@ -180,7 +180,7 @@ def add_train_test_args(parser):
 
     parser.add_argument('--num_layers',
                         type=int,
-                        default=3,
+                        default=1,
                         help='Number of layers.')
 
     parser.add_argument('--multi_label_class',
