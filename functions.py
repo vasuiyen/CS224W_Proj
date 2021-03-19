@@ -25,7 +25,7 @@ class ImplicitFunction(Function):
 
         dphi = lambda X: torch.mul(X, D)
         grad_z, err, status, _ = ImplicitFunction.inn_pred(W.T, X_0, A, grad_x, dphi, mitr=bw_mitr, transposed_A=True)
-        grad_z.clamp_(-1,1)
+        # grad_z.clamp_(-1,1)
 
         grad_W = grad_z @ torch.spmm(A, X.T)
         grad_B = grad_z
