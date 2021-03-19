@@ -141,6 +141,7 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         """       
         super(ImplicitGraphNeuralNet, self).__init__()
         
+        self.args = args
 
         self.node_channels = input_dim
         self.hidden_channels = args.hidden_dim
@@ -153,29 +154,18 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         self.log.debug(f"Model node channels = {self.node_channels}")
         
         # Initialize the neural net
-        self.graph_layer = GeneralGraphLayer(
-            in_channels = args.hidden_dim, 
-            out_channels = args.hidden_dim, 
-            node_channels = input_dim, 
-            max_iters = args.max_forward_iterations,
-            tol = args.tol,
-            log = log,
-            **kwargs
-        )
+        self.graph_layer = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa)
+
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         
         self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
         self.embedding.weight.requires_grad = False
-
-        self.ig1 = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa)
+        
 
     def reset_parameters(self):
-        self.graph_layer.reset_parameters()
         self.prediction_head.reset_parameters()
         self.embedding.reset_parameters()
 
-    def project_recurrent_weight(self, spectral_radius):
-        projection_norm_inf(self.graph_layer.W.weight, self.kappa / spectral_radius)
     
     def forward(self, data):
         """        
@@ -195,90 +185,25 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
                 
         else:
             spectral_radius = compute_spectral_radius(adj_matrix)
-        
-        self.project_recurrent_weight(spectral_radius)
-
-        # x = self.embedding(node_index)
-
-        x_0 = torch.zeros(self.hidden_channels, num_nodes).to(node_feature.device)
-        
-        # Train embeddings to convergence; this constitutes 1 forward pass
-        self.log.debug(f"Model u feature shape = {node_feature.shape}")
-        # x = self.graph_layer(x, node_feature, adj_t)
 
         adj_matrix = torch.sparse.FloatTensor(
             torch.LongTensor(np.vstack((adj_matrix.row, adj_matrix.col))),
             torch.FloatTensor(adj_matrix.data),
             adj_matrix.shape).to(node_feature.device)
 
-        x = self.ig1(x_0, adj_matrix, node_feature, F.relu, spectral_radius, A_orig=None).T
+        # x = self.embedding(node_index)
+        x_0 = torch.zeros(self.hidden_channels, num_nodes).to(node_feature.device)
+        
+        # Train embeddings to convergence; this constitutes 1 forward pass
+        self.log.debug(f"Model u feature shape = {node_feature.shape}")
+
+        x = self.graph_layer(x_0, adj_matrix, torch.transpose(node_feature, 0, 1), F.relu, spectral_radius, 
+        self.args.max_forward_iterations, self.args.max_forward_iterations).T
         # self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
 
         return self.prediction_head(x)
-
-
-class IGNN(nn.Module):
-    # def __init__(self, nfeat, nhid, nclass, num_node, dropout, kappa=0.9, adj_orig=None):
-    def __init__(self,
-                input_dim, 
-                output_dim, 
-                args, 
-                log,
-                **kwargs):
-        super(IGNN, self).__init__()
-
-        self.adj = None
-        self.adj_rho = None
-        self.adj_orig = None
-
-        nfeat = input_dim
-        nhid = args.hidden_dim
-        nclass = output_dim
-        dropout = args.drop_prob
-        self.tol = args.tol
-        kappa = args.kappa
-        num_node = kwargs.pop('num_nodes')
-
-        self.adj_rho = {}
-
-        #one layer with V
-        self.ig1 = ImplicitGraph(nfeat, nhid, num_node, kappa)
-        self.dropout = dropout
-        self.X_0 = nn.Parameter(torch.zeros(nhid, num_node), requires_grad=False)
-        self.V = nn.Linear(nhid, nclass, bias=False)
-
-    def forward(self, data):
-
-        node_index, features, edge_index, adj = data.orig_node_idx, data.x, data.edge_index, data.adj_matrix
-        num_nodes = features.shape[0]
-
-        X_0 = self.X_0.data[:, node_index]
-
-        if hasattr(data, 'batch_index'):
-            if data.batch_index not in self.adj_rho:
-                self.adj_rho[data.batch_index] = compute_spectral_radius(adj)
-
-            adj_rho = self.adj_rho.get(data.batch_index)
-                
-        else:
-            adj_rho = compute_spectral_radius(adj_matrix)
-
-        # Convert adjacency matrix to torch tensor
-        adj = torch.sparse.FloatTensor(
-            torch.LongTensor(np.vstack((adj.row, adj.col))),
-            torch.FloatTensor(adj.data),
-            adj.shape).to(features.device)
-
-        x = torch.transpose(features, 0, 1)
-        x = self.ig1(X_0, adj, x, F.relu, adj_rho, A_orig=self.adj_orig).T
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.V(x)
-        return x
-
-    def reset_parameters(self):
-        pass
 
 class DataParallelWrapper(torch.nn.DataParallel):  
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
