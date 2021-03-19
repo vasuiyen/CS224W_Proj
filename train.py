@@ -180,13 +180,11 @@ def train(model, data_loader, optimizer, device, evaluator, args):
             optimizer.zero_grad()
             
             # Forward
-            out, reg = model(batch)
-            out = out[batch.train_mask]
+            out = model(batch)[batch.train_mask]
             labels = batch.y.squeeze()[batch.train_mask]
             
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, args.loss_type)
-            loss += reg
             loss_meter.update(loss.item(), batch_size)
             
             # Backward
@@ -241,13 +239,11 @@ def evaluate(model, data_loader, device, evaluator, args):
                 continue
 
             # Forward
-            out, reg = model(batch)
-            out = out[batch.valid_mask]
+            out = model(batch)[batch.valid_mask]
             labels = batch.y.squeeze()[batch.valid_mask]
 
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, args.loss_type)
-            loss += reg
             loss_meter.update(loss.item(), batch_size)
 
             # Add batch data to the evaluation data
@@ -256,7 +252,7 @@ def evaluate(model, data_loader, device, evaluator, args):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            if args.multi_label_class == False:
+            if args.multi_label_class == True:
                 pred = out.cpu().detach().numpy()
                 binary_pred = np.zeros(pred.shape).astype('int')
                 for i in range(pred.shape[0]):
