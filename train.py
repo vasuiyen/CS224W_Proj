@@ -199,7 +199,7 @@ def train(model, data_loader, optimizer, device, evaluator, args):
                 labels = torch.unsqueeze(labels, -1)
             
             y_true.extend(labels.tolist())
-            if args.multi_label_class == True:
+            if args.multi_label_class == False:
                 pred = out.cpu().detach().numpy()
                 binary_pred = np.zeros(pred.shape).astype('int')
                 for i in range(pred.shape[0]):
