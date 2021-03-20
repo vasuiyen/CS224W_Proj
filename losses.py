@@ -26,4 +26,4 @@ def soft_spectral_loss(A, spectral_radius):
 
 def hard_spectral_loss(A, spectral_radius):
     assert len(A.shape) == 2
-    return torch.max(A.abs().sum(-1))
+    return torch.max(A.abs().sum(-1)) 
