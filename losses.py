@@ -21,8 +21,9 @@ def isometricLoss(output, target, type='L1'):
 def soft_spectral_loss(A, spectral_radius):
     """ In place of doing a direct maximum, use a smooth approximation to the max """
     assert len(A.shape) == 2
-    weights = torch.softmax(A.abs().sum(-1))
-    return A * weights
+    abs_row_sum = A.abs().sum(-1)
+    weights = torch.softmax(abs_row_sum, -1)
+    return torch.sum(abs_row_sum * weights)
 
 def hard_spectral_loss(A, spectral_radius):
     assert len(A.shape) == 2
