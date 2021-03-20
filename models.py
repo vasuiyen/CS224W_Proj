@@ -9,12 +9,102 @@ from torch_geometric.nn import GCNConv
 
 from torch_geometric.utils.convert import to_scipy_sparse_matrix
 from scipy.sparse import coo_matrix
-from losses import soft_spectral_loss, hard_spectral_loss
 
 import numpy as np
 
 from layers import *
 from utils import *
+
+class GCN(torch.nn.Module):
+    def __init__(self, 
+                input_dim, 
+                output_dim, 
+                args, 
+                log, 
+                **kwargs):
+
+        # TODO: Implement this function that initializes self.convs, 
+        # self.bns, and self.softmax.
+
+        super(GCN, self).__init__()
+
+        # A list of GCNConv layers
+        self.convs = None
+
+        # A list of 1D batch normalization layers
+        self.bns = None
+
+        # The log softmax layer
+        self.softmax = None
+
+        self.loss = F.nll_loss
+
+        self.log = log
+		
+        ############# Your code here ############
+        ## Note:
+        ## 1. You should use torch.nn.ModuleList for self.convs and self.bns
+        ## 2. self.convs has num_layers GCNConv layers
+        ## 3. self.bns has num_layers - 1 BatchNorm1d layers
+        ## 4. You should use torch.nn.LogSoftmax for self.softmax
+        ## 5. The parameters you can set for GCNConv include 'in_channels' and 
+        ## 'out_channels'. More information please refer to the documentation:
+        ## https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GCNConv
+        ## 6. The only parameter you need to set for BatchNorm1d is 'num_features'
+        ## More information please refer to the documentation: 
+        ## https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
+        ## (~10 lines of code)
+        self.convs = torch.nn.ModuleList(
+            [GCNConv(input_dim, args.hidden_dim)] + 
+            [GCNConv(args.hidden_dim, args.hidden_dim) for _ in range (args.num_layers - 2) ] + 
+            [GCNConv(args.hidden_dim, output_dim)]
+        )
+        self.bns = torch.nn.ModuleList(
+            [torch.nn.BatchNorm1d(args.hidden_dim) for _ in range (args.num_layers - 1)] 
+        )
+
+        self.softmax = torch.nn.LogSoftmax(dim=-1)
+
+        #########################################
+
+        # Probability of an element to be zeroed
+        self.dropout = args.drop_prob
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, data):
+        # TODO: Implement this function that takes the feature tensor x,
+        # edge_index tensor adj_t and returns the output tensor as
+        # shown in the figure.
+
+        out = None
+
+        x, adj_t = data.x, data.edge_index
+
+        ############# Your code here ############
+        ## Note:
+        ## 1. Construct the network as showing in the figure
+        ## 2. torch.nn.functional.relu and torch.nn.functional.dropout are useful
+        ## More information please refer to the documentation:
+        ## https://pytorch.org/docs/stable/nn.functional.html
+        ## 3. Don't forget to set F.dropout training to self.training
+        ## 4. If return_embeds is True, then skip the last softmax layer
+        ## (~7 lines of code)
+        for i in range(len(self.bns)):
+            
+            x = self.convs[i](x, adj_t)
+            x = self.bns[i](x)
+            x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        
+        out = self.convs[-1](x, adj_t)
+        #########################################
+
+        return out
 
 class ImplicitGraphNeuralNet(torch.nn.Module):
     """ 
@@ -53,37 +143,29 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         
         self.args = args
 
+        self.aggr = args.aggr
         self.node_channels = input_dim
         self.hidden_channels = args.hidden_dim
         self.kappa = args.kappa
         self.drop_prob = args.drop_prob
         self.spectral_radius_dict = {}
-        self.reg_coefficient = args.reg_coefficient
-        self.reg_loss_type = args.reg_loss_type
-        
         num_nodes = kwargs.pop('orig_num_nodes')
         
         self.log = log
         self.log.debug(f"Model node channels = {self.node_channels}")
         
-        # Initialize the implicit graph layers
-        self.implicit_graph_layers = nn.ModuleList([
-            ImplicitGraph(input_dim, args.hidden_dim, num_nodes, args.kappa, args.init_type) for l in range(args.num_layers)
-        ])
-        
+        # Initialize the neural net
+        self.graph_layer = ImplicitGraph(input_dim, args.hidden_dim, num_nodes, self.aggr, args.kappa)
+
         self.prediction_head = nn.Linear(args.hidden_dim, output_dim)
         
-        if self.args.embed_type != 'zero':
-            self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
-            self.embedding.weight.requires_grad = False
-
-        if self.args.embed_type == 'random':
-            nn.init.uniform_(self.embedding.weight, -1.0, 1.0)
+        self.embedding = nn.Embedding(num_nodes, args.hidden_dim)
+        self.embedding.weight.requires_grad = False
+        self.attn_layer = None		
 
     def reset_parameters(self):
         self.prediction_head.reset_parameters()
-        if self.args.embed_type == 'persistent':
-            self.embedding.reset_parameters()
+        self.embedding.reset_parameters()
 
     
     def forward(self, data):
@@ -101,46 +183,27 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
                 self.spectral_radius_dict[data.batch_index] = compute_spectral_radius(adj_matrix)
 
             spectral_radius = self.spectral_radius_dict.get(data.batch_index)
+                
         else:
             spectral_radius = compute_spectral_radius(adj_matrix)
-            
+
         adj_matrix = torch.sparse.FloatTensor(
             torch.LongTensor(np.vstack((adj_matrix.row, adj_matrix.col))),
             torch.FloatTensor(adj_matrix.data),
             adj_matrix.shape).to(node_feature.device)
 
-        if self.args.embed_type == 'zero':
-            x = torch.zeros(num_nodes, self.hidden_channels).to(node_feature.device)
-        else:
-            x = self.embedding(node_index)
+        # x = self.embedding(node_index)
+        x_0 = torch.zeros(self.hidden_channels, num_nodes).to(node_feature.device)
         
         # Train embeddings to convergence; this constitutes 1 forward pass
         self.log.debug(f"Model u feature shape = {node_feature.shape}")
 
-        for implicit_graph in self.implicit_graph_layers:
-            x = implicit_graph(torch.transpose(x, 0, 1), adj_matrix, torch.transpose(node_feature, 0, 1), F.relu, spectral_radius, 
-            self.args.max_forward_iterations, self.args.max_forward_iterations).T
-
-        if self.args.embed_type == 'persistent' and self.training == True:
-            self.embedding.weight[node_index] = x.detach().clone()
+        x = self.graph_layer(x_0, adj_matrix, torch.transpose(node_feature, 0, 1), F.relu, spectral_radius, self.args.max_forward_iterations, self.args.max_forward_iterations).T
+        # self.embedding.weight[node_index] = x.detach().clone()
         
         x = F.dropout(x, self.drop_prob, training=self.training)
-        prediction_logits = self.prediction_head(x)
-        
-        reg_loss = 0
-        for implicit_graph in self.implicit_graph_layers:
-             reg_loss += self.reg_coefficient * self.reg_loss(implicit_graph.W, spectral_radius)
 
-        return prediction_logits, reg_loss
-    
-    def reg_loss(self, W, spectral_radius):
-        """ Regularization losses """
-        if self.reg_loss_type == "hard":
-            return hard_spectral_loss(W, spectral_radius)
-        elif self.reg_loss_type == "soft":
-            return soft_spectral_loss(W, spectral_radius)
-        else:
-            raise ValueError("Regularization loss type not recognized")
+        return self.prediction_head(x)
 
 class DataParallelWrapper(torch.nn.DataParallel):  
     """ torch.nn.DataParallel that supports clamp() and reset_parameters()"""     
