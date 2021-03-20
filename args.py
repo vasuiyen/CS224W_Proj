@@ -59,7 +59,7 @@ def get_train_args():
 
     parser.add_argument('--max_checkpoints',
                         type=int,
-                        default=5,
+                        default=2**20,
                         help='Maximum number of checkpoints to keep on disk.')
 
     parser.add_argument('--optimizer',
