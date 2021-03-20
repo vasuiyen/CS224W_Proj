@@ -47,12 +47,10 @@ def main(args):
 
     # Get data loader
     log.info('Building dataset...')
-    # Download and process data at './dataset/xxx'
-    dataset = PygNodePropPredDataset(name = args.dataset, root = 'dataset/')
-    evaluator = Evaluator(name = args.dataset)
-
-    split_idx = dataset.get_idx_split() 
-    data = dataset[0]
+    dataset, split_idx, evaluator = load_pyg_dataset(args.dataset)
+    data = dataset[0]    
+    # Attach the node idx to the data
+    data['orig_node_idx'] = torch.arange(data.x.shape[0])
 
     # Convert split indices to boolean masks and add them to `data`.
     for key, idx in split_idx.items():
@@ -60,11 +58,13 @@ def main(args):
         mask[idx] = True
         data[f'{key}_mask'] = mask
 
+
     cluster_data = ClusterData(data, num_parts=args.num_partitions,
                                recursive=False, save_dir=dataset.processed_dir)
 
-    dataset_loader = ClusterLoader(cluster_data, batch_size=args.batch_size,
-                           shuffle=args.data_shuffle, num_workers=args.num_workers)
+    dataset_loader = CustomClusterLoader(cluster_data, batch_size=args.batch_size,
+                           shuffle=args.data_shuffle, num_workers=args.num_workers,
+                           normalize_adj_matrix=args.normalize_adj_matrix)
 
     # Get model
     log.info('Building model...')
@@ -78,7 +78,7 @@ def main(args):
     log.info('Testing...')
 
     # Evaluate, display the stats and save the model
-    dev_results = test(model, dataset_loader, device, evaluator)
+    dev_results = test(model, dataset_loader, device, evaluator, args)
 
     # Log the metrics
     dev_log_message = ''.join('{} - {}; '.format(k, v) for k, v in dev_results.items())
@@ -86,7 +86,7 @@ def main(args):
     log.info(f'Testing - {dev_log_message}')
 
 
-def test(model, data_loader, device, evaluator):
+def test(model, data_loader, device, evaluator, args):
 
     model.eval()
 
@@ -107,8 +107,21 @@ def test(model, data_loader, device, evaluator):
             labels = batch.y.squeeze(1)[batch.test_mask]
 
             # Add batch data to the evaluation data
-            y_true.extend(torch.unsqueeze(labels.cpu(), -1).tolist())
-            y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
+            labels = labels.cpu()
+            if len(labels.shape) == 1:
+                labels = torch.unsqueeze(labels, -1)
+            
+            y_true.extend(labels.tolist())
+            if args.multi_label_class == True:
+                pred = out.cpu().detach().numpy()
+                binary_pred = np.zeros(pred.shape).astype('int')
+                for i in range(pred.shape[0]):
+                    k = labels[i].cpu().detach().numpy().sum().astype('int')
+                    topk_idx = pred[i].argsort()[-k:]
+                    binary_pred[i][topk_idx] = 1
+                y_pred.extend(binary_pred.tolist())
+            else:
+                y_pred.extend(torch.argmax(out, -1, keepdim=True).cpu().tolist())
 
     # Evaluate the training results
     results = evaluator.eval({

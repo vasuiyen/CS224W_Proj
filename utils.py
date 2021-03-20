@@ -24,8 +24,6 @@ import deepsnap
 import copy
 import sys
 
-import models
-
 from torch_sparse import SparseTensor
 
 def estimate_spectral_radius(graph):
