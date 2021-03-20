@@ -59,7 +59,7 @@ def get_train_args():
 
     parser.add_argument('--max_checkpoints',
                         type=int,
-                        default=2**20,
+                        default=5,
                         help='Maximum number of checkpoints to keep on disk.')
 
     parser.add_argument('--optimizer',
@@ -100,7 +100,10 @@ def get_train_args():
                         type=float,
                         default=3e-6,
                         help="Tolerance to determine convergence of embeddings")
-        
+    parser.add_argument('--aggr', 
+                        type=str,
+                        default='sum',
+                        help="Aggregation Mechanism valid values are sum, mean and attn")        
 
     args = parser.parse_args()
 
@@ -177,10 +180,15 @@ def add_train_test_args(parser):
                         type=int,
                         default=32,
                         help='Hidden layers dimension size.')
+						
+    parser.add_argument('--attn_size',
+                        type=int,
+                        default=32,
+                        help='Attention layers dimension size.')						
 
     parser.add_argument('--num_layers',
                         type=int,
-                        default=1,
+                        default=3,
                         help='Number of layers.')
 
     parser.add_argument('--multi_label_class',
@@ -191,30 +199,4 @@ def add_train_test_args(parser):
     parser.add_argument('--normalize_adj_matrix',
                         type=lambda s: s.lower().startswith('t'),
                         default=False,
-                        help='Whether to normalize the adjacency matrix.') 
-    
-    parser.add_argument('--embed_type',
-                        type=str,
-                        choices=('zero', 'random', 'persistent'),
-                        default='zero',
-                        help='What kind of embeddings to use.')
-
-    parser.add_argument('--init_type',
-                        type=str,
-                        choices=('uniform', 'kaiming_uniform', 'kaiming_normal'),
-                        default='kaiming_uniform',
-                        help='What kind of initialization to use for the recurrent layer weights.')
-    
-    parser.add_argument('--reg_coefficient',
-                        type=float, 
-                        default = 0,
-                        help = "If nonzero, add a regularization loss on the weights based on the spectral norm of the adjacency matrix")
-    
-    parser.add_argument('--reg_loss_type',
-                        type=str, 
-                        choices = ('hard', 'soft'),
-                        default = 'hard', 
-                        help = "See losses.py for explanation")
-
-
-                        
+                        help='Whether to normalize the adjacency matrix.')   
