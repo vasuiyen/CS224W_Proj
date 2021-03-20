@@ -127,9 +127,9 @@ class ImplicitGraphNeuralNet(torch.nn.Module):
         x = F.dropout(x, self.drop_prob, training=self.training)
         prediction_logits = self.prediction_head(x)
         
-        reg_loss = self.reg_coefficient
+        reg_loss = 0
         for implicit_graph in self.implicit_graph_layers:
-             reg_loss *= self.reg_loss(implicit_graph.W, spectral_radius)
+             reg_loss += self.reg_coefficient * self.reg_loss(implicit_graph.W, spectral_radius)
 
         return prediction_logits, reg_loss
     
