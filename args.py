@@ -202,7 +202,7 @@ def add_train_test_args(parser):
     parser.add_argument('--init_type',
                         type=str,
                         choices=('uniform', 'kaiming_uniform', 'kaiming_normal'),
-                        default='zero',
+                        default='kaiming_uniform',
                         help='What kind of initialization to use for the recurrent layer weights.')
     
     parser.add_argument('--reg_coefficient',

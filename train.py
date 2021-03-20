@@ -39,7 +39,9 @@ from models import DataParallelWrapper
 def main(args):
 
     # Set up logging and devices
-    args.save_dir = get_save_dir(args.save_dir, args.name + '-' + args.dataset, training=True)
+    args.save_dir = get_save_dir(args.save_dir, 
+        args.name + '-' + args.dataset + '-' + str(args.hidden_dim) + '-' + str(args.max_forward_iterations) + '-' + args.reg_loss_type + '-' + args.embed_type + '-' + args.init_type, 
+        training=True)
     log = get_logger(args.save_dir, args.name)
     tboard = SummaryWriter(args.save_dir)
     device, args.gpu_ids = get_available_devices()
