@@ -1,0 +1,6 @@
+['remote "cs224w_put"']
+    url = s3://cs224w-final-project-experiments/results/
+    region = eu-central-1
+    credentialpath = /home/shurubaru/.aws/credentials
+['remote "cs224w_get"']
+    url = https://cs224w-final-project-experiments.s3.eu-central-1.amazonaws.com/results/

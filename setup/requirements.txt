@@ -6,3 +6,4 @@ torch_geometric
 deepsnap
 ogb
 tensorboard
+'dvc[s3]'

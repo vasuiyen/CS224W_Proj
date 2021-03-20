@@ -1,0 +1,6 @@
+# Ignore everything
+/*
+
+# except for these two patterns
+!.gitignore
+!*.dvc

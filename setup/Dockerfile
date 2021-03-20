@@ -33,7 +33,13 @@ RUN pip install --upgrade -q torch-geometric
 RUN pip install ogb
 RUN pip install -q git+https://github.com/snap-stanford/deepsnap.git 
 
-ENV HOME /home/shurubaru
+# Install DVC
+RUN pip install --upgrade 'dvc[s3]' --ignore-installed ruamel.yaml
+
+# Install Graph ML related packages
+RUN pip install --upgrade networkx
+
+ENV HOME /home/cs224w
 RUN mkdir -p ${HOME}
 
-WORKDIR /home/shurubaru
+WORKDIR /home/cs224w

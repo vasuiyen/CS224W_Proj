@@ -1,0 +1,5 @@
+outs:
+- md5: b9772847f56f24d7d16863e9a2d2e831.dir
+  size: 41713897
+  nfiles: 6
+  path: ImplicitGraphNeuralNet-ogbn-products-1024-50-hard-zero-kaimung_uniform
