@@ -180,11 +180,13 @@ def train(model, data_loader, optimizer, device, evaluator, args):
             optimizer.zero_grad()
             
             # Forward
-            out = model(batch)[batch.train_mask]
+            out, reg = model(batch)
+            out = out[batch.train_mask]
             labels = batch.y.squeeze()[batch.train_mask]
             
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, args.loss_type)
+            loss += reg
             loss_meter.update(loss.item(), batch_size)
             
             # Backward
@@ -239,11 +241,13 @@ def evaluate(model, data_loader, device, evaluator, args):
                 continue
 
             # Forward
-            out = model(batch)[batch.valid_mask]
+            out, reg = model(batch)
+            out = out[batch.valid_mask]
             labels = batch.y.squeeze()[batch.valid_mask]
 
             # Calculate the loss and do the average
             loss = isometricLoss(out, labels, args.loss_type)
+            loss += reg
             loss_meter.update(loss.item(), batch_size)
 
             # Add batch data to the evaluation data

@@ -191,7 +191,18 @@ def add_train_test_args(parser):
     parser.add_argument('--normalize_adj_matrix',
                         type=lambda s: s.lower().startswith('t'),
                         default=False,
-                        help='Whether to normalize the adjacency matrix.')    
+                        help='Whether to normalize the adjacency matrix.')  
+
+    parser.add_argument('--reg_coefficient',
+                        type=float, 
+                        default = 0,
+                        help = "If nonzero, add a regularization loss on the weights based on the spectral norm of the adjacency matrix")
+
+    parser.add_argument('--reg_loss_type',
+                        type=str, 
+                        choices = ('hard', 'soft'),
+                        default = 'hard', 
+                        help = "See losses.py for explanation")
 
 
 
