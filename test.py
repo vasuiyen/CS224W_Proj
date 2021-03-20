@@ -103,7 +103,8 @@ def test(model, data_loader, device, evaluator, args):
                 continue
 
             # Forward
-            out, _ = model(batch)[batch.test_mask]
+            out, _ = model(batch)
+            out = out[batch.test_mask]
             labels = batch.y.squeeze(1)[batch.test_mask]
 
             # Add batch data to the evaluation data
